@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz Blitz — Chapter 3</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 680px;
+      padding: 20px;
+    }
+
+    /* ── SPLASH ── */
+    #splash { text-align: center; animation: fadeIn 0.6s ease; }
+
+    #splash h1 {
+      font-size: 3.2rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(90deg, #f7971e, #ffd200);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    #splash p { font-size: 1.1rem; color: #c9b8ff; margin-bottom: 36px; }
+
+    .btn-start {
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      color: #1a1a2e;
+      border: none;
+      border-radius: 50px;
+      padding: 16px 48px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 24px rgba(247, 151, 30, 0.45);
+    }
+
+    .btn-start:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 32px rgba(247, 151, 30, 0.55);
+    }
+
+    /* ── QUIZ ── */
+    #quiz { display: none; animation: fadeIn 0.4s ease; }
+
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      font-size: 0.95rem;
+      color: #c9b8ff;
+    }
+
+    .score-display { font-size: 1.3rem; font-weight: 700; color: #ffd200; }
+
+    .timer-bar-wrap {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      margin-bottom: 26px;
+      overflow: hidden;
+    }
+
+    #timer-bar {
+      height: 100%;
+      width: 100%;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #56ab2f, #a8e063);
+      transition: width 0.9s linear, background 0.9s linear;
+    }
+
+    #timer-bar.danger { background: linear-gradient(90deg, #e52d27, #b31217); }
+
+    .card {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 32px 28px;
+    }
+
+    .q-number {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #a78bfa;
+      margin-bottom: 10px;
+    }
+
+    .q-text {
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1.45;
+      margin-bottom: 28px;
+    }
+
+    .choices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .choice-btn {
+      background: rgba(255, 255, 255, 0.09);
+      border: 2px solid rgba(255, 255, 255, 0.18);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 16px 12px;
+      cursor: pointer;
+      transition: background 0.18s, border-color 0.18s, transform 0.1s;
+      text-align: left;
+    }
+
+    .choice-btn:hover:not(:disabled) {
+      background: rgba(167, 139, 250, 0.25);
+      border-color: #a78bfa;
+      transform: translateY(-2px);
+    }
+
+    .choice-btn.correct {
+      background: #166534;
+      border-color: #4ade80;
+      color: #bbf7d0;
+      cursor: default;
+    }
+
+    .choice-btn.wrong {
+      background: #7f1d1d;
+      border-color: #f87171;
+      color: #fecaca;
+      cursor: default;
+    }
+
+    .choice-btn:disabled { cursor: default; }
+
+    /* ── RESULTS ── */
+    #results { display: none; animation: fadeIn 0.5s ease; }
+
+    .result-header { text-align: center; margin-bottom: 32px; }
+
+    .result-header h2 {
+      font-size: 2.4rem;
+      font-weight: 900;
+      background: linear-gradient(90deg, #f7971e, #ffd200);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .result-header .category {
+      font-size: 1.1rem;
+      color: #c9b8ff;
+      margin-top: 6px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin: 20px 0 32px;
+    }
+
+    .stat {
+      text-align: center;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 16px;
+      padding: 16px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stat .value { font-size: 2rem; font-weight: 800; color: #ffd200; }
+    .stat .label {
+      font-size: 0.8rem;
+      color: #c9b8ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    .summary-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #a78bfa;
+      margin-bottom: 12px;
+    }
+
+    .summary-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.92rem;
+    }
+
+    .summary-item .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot.ok  { background: #4ade80; }
+    .dot.bad { background: #f87171; }
+
+    .btn-again {
+      display: block;
+      width: 100%;
+      background: linear-gradient(135deg, #a78bfa, #7c3aed);
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 15px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+    }
+
+    .btn-again:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(124, 58, 237, 0.55);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 480px) {
+      .choices { grid-template-columns: 1fr; }
+      #splash h1 { font-size: 2.4rem; }
+      .stat-row { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SPLASH SCREEN -->
+  <div id="splash">
+    <h1>Quiz Blitz!</h1>
+    <p>10 questions &nbsp;·&nbsp; 30 seconds each &nbsp;·&nbsp; How high can you score?</p>
+    <button class="btn-start" onclick="startQuiz()">Let's Play!</button>
+  </div>
+
+  <!-- QUIZ SCREEN -->
+  <div id="quiz">
+    <div class="hud">
+      <span id="q-counter">Question 1 / 10</span>
+      <span class="score-display">Score: <span id="score-val">0</span></span>
+    </div>
+    <div class="timer-bar-wrap">
+      <div id="timer-bar"></div>
+    </div>
+    <div class="card">
+      <div class="q-number" id="q-number"></div>
+      <div class="q-text"   id="q-text"></div>
+      <div class="choices"  id="choices"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS SCREEN -->
+  <div id="results">
+    <div class="result-header">
+      <h2 id="result-title"></h2>
+      <div class="category" id="result-category"></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="value" id="stat-score"></div>
+        <div class="label">Final Score</div>
+      </div>
+      <div class="stat">
+        <div class="value" id="stat-correct"></div>
+        <div class="label">Correct</div>
+      </div>
+      <div class="stat">
+        <div class="value" id="stat-pct"></div>
+        <div class="label">Accuracy</div>
+      </div>
+    </div>
+    <div class="summary-title">Your Answers</div>
+    <ul class="summary-list" id="summary-list"></ul>
+    <button class="btn-again" onclick="resetQuiz()">Play Again</button>
+  </div>
+
+</div>
+
+<script>
+  // ── QUESTION DATA ─────────────────────────────────────────────────────────
+  // Each question is an object stored inside an array.
+  // "correct" is the INDEX of the right answer in the choices array (0-based).
+  const ALL_QUESTIONS = [
+    { text: 'How many sides does a hexagon have?',
+      choices: ['5', '6', '7', '8'], correct: 1 },
+    { text: 'Which planet is known as the Red Planet?',
+      choices: ['Venus', 'Jupiter', 'Mars', 'Saturn'], correct: 2 },
+    { text: 'What is the capital city of Japan?',
+      choices: ['Beijing', 'Seoul', 'Bangkok', 'Tokyo'], correct: 3 },
+    { text: 'Which animal is the fastest land animal on Earth?',
+      choices: ['Lion', 'Cheetah', 'Horse', 'Leopard'], correct: 1 },
+    { text: 'How many strings does a standard guitar have?',
+      choices: ['4', '5', '6', '7'], correct: 2 },
+    { text: 'What gas do plants absorb from the air to make food?',
+      choices: ['Oxygen', 'Nitrogen', 'Carbon dioxide', 'Hydrogen'], correct: 2 },
+    { text: 'Which ocean is the largest on Earth?',
+      choices: ['Atlantic', 'Indian', 'Arctic', 'Pacific'], correct: 3 },
+    { text: 'How many colors are in a rainbow?',
+      choices: ['5', '6', '7', '8'], correct: 2 },
+    { text: 'What is 12 × 12?',
+      choices: ['124', '144', '132', '148'], correct: 1 },
+    { text: 'Which instrument has black and white keys?',
+      choices: ['Violin', 'Piano', 'Flute', 'Drums'], correct: 1 },
+    { text: 'What is the hardest natural substance on Earth?',
+      choices: ['Gold', 'Iron', 'Diamond', 'Quartz'], correct: 2 },
+    { text: 'How many days are in a leap year?',
+      choices: ['364', '365', '366', '367'], correct: 2 },
+    { text: 'Which country invented pizza?',
+      choices: ['France', 'Spain', 'Greece', 'Italy'], correct: 3 },
+    { text: 'What does HTML stand for?',
+      choices: ['High Tech Modern Language', 'HyperText Markup Language',
+                'Home Tool Markup Language', 'HyperText Machine Logic'], correct: 1 },
+    { text: 'How many bones are in the adult human body?',
+      choices: ['196', '206', '216', '226'], correct: 1 },
+  ];
+
+  const TIME_LIMIT = 30;        // seconds per question
+  const SCORE_PER_CORRECT = 100; // base points for a correct answer
+
+  // ── GAME STATE ────────────────────────────────────────────────────────────
+  let questions = [];   // shuffled subset of ALL_QUESTIONS
+  let currentIndex = 0;
+  let score = 0;
+  let timerInterval = null;
+  let timeLeft = TIME_LIMIT;
+  let answered = false;
+  let userAnswers = []; // array of { text, wasCorrect, chosen, correctAnswer }
+
+  // ── SHUFFLE (Fisher-Yates algorithm) ──────────────────────────────────────
+  function shuffle(arr) {
+    const a = [...arr]; // copy so we don't change the original
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]]; // swap using array destructuring
+    }
+    return a;
+  }
+
+  // ── START QUIZ ────────────────────────────────────────────────────────────
+  function startQuiz() {
+    questions = shuffle(ALL_QUESTIONS).slice(0, 10); // pick 10 random questions
+    currentIndex = 0;
+    score = 0;
+    userAnswers = [];
+
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('quiz').style.display = 'block';
+
+    showQuestion();
+  }
+
+  // ── SHOW CURRENT QUESTION ─────────────────────────────────────────────────
+  function showQuestion() {
+    answered = false;
+    timeLeft = TIME_LIMIT;
+
+    // Array destructuring pulls the three properties out of the question object
+    const { text, choices, correct } = questions[currentIndex];
+
+    document.getElementById('q-counter').textContent =
+      `Question ${currentIndex + 1} / ${questions.length}`;
+    document.getElementById('q-number').textContent =
+      `Question ${currentIndex + 1}`;
+    document.getElementById('q-text').textContent = text;
+    document.getElementById('score-val').textContent = score;
+
+    // .map() transforms each choice string into an HTML button string
+    const buttonsHTML = choices.map((choice, i) =>
+      `<button class="choice-btn" onclick="answer(${i})" id="btn-${i}">${choice}</button>`
+    ).join('');
+    document.getElementById('choices').innerHTML = buttonsHTML;
+
+    startTimer();
+  }
+
+  // ── TIMER ─────────────────────────────────────────────────────────────────
+  function startTimer() {
+    clearInterval(timerInterval); // always clear before starting a new one
+    updateTimerBar();
+
+    timerInterval = setInterval(() => {
+      timeLeft -= 1;
+      updateTimerBar();
+
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        timeExpired();
+      }
+    }, 1000);
+  }
+
+  function updateTimerBar() {
+    const bar = document.getElementById('timer-bar');
+    const pct = (timeLeft / TIME_LIMIT) * 100;
+    bar.style.width = `${pct}%`;
+    // Switch to red when under 8 seconds
+    bar.classList.toggle('danger', timeLeft <= 8);
+  }
+
+  // ── HANDLE AN ANSWER CLICK ────────────────────────────────────────────────
+  function answer(chosenIndex) {
+    if (answered) return; // ignore clicks after the first
+    answered = true;
+    clearInterval(timerInterval);
+
+    const { choices, correct } = questions[currentIndex];
+    const wasCorrect = chosenIndex === correct;
+
+    // Award base points plus a time bonus for answering quickly
+    const timeBonus = wasCorrect ? Math.floor(timeLeft * 5) : 0;
+    if (wasCorrect) {
+      score += SCORE_PER_CORRECT + timeBonus;
+    }
+
+    document.getElementById('score-val').textContent = score;
+
+    // Disable every button so the player can't change their answer
+    const allBtns = document.querySelectorAll('.choice-btn');
+    allBtns.forEach(btn => { btn.disabled = true; });
+
+    // Highlight correct answer green, wrong answer red
+    document.getElementById(`btn-${correct}`).classList.add('correct');
+    if (!wasCorrect) {
+      document.getElementById(`btn-${chosenIndex}`).classList.add('wrong');
+    }
+
+    // Record this answer for the results screen
+    userAnswers.push({
+      text: questions[currentIndex].text,
+      wasCorrect,
+      chosen: choices[chosenIndex],
+      correctAnswer: choices[correct],
+    });
+
+    // Auto-advance after 1.5 seconds
+    setTimeout(nextQuestion, 1500);
+  }
+
+  // ── HANDLE TIME RUNNING OUT ───────────────────────────────────────────────
+  function timeExpired() {
+    if (answered) return;
+    answered = true;
+
+    const { choices, correct } = questions[currentIndex];
+
+    document.querySelectorAll('.choice-btn').forEach(btn => { btn.disabled = true; });
+    document.getElementById(`btn-${correct}`).classList.add('correct');
+
+    userAnswers.push({
+      text: questions[currentIndex].text,
+      wasCorrect: false,
+      chosen: '(time ran out)',
+      correctAnswer: choices[correct],
+    });
+
+    setTimeout(nextQuestion, 1500);
+  }
+
+  // ── ADVANCE TO NEXT QUESTION OR RESULTS ───────────────────────────────────
+  function nextQuestion() {
+    currentIndex += 1;
+    if (currentIndex < questions.length) {
+      showQuestion();
+    } else {
+      showResults();
+    }
+  }
+
+  // ── SHOW RESULTS SCREEN ───────────────────────────────────────────────────
+  function showResults() {
+    document.getElementById('quiz').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+    // .filter() keeps only the answers where wasCorrect is true
+    const correctCount = userAnswers.filter(a => a.wasCorrect).length;
+    const pct = Math.round((correctCount / questions.length) * 100);
+
+    const category = getCategory(pct);
+    document.getElementById('result-title').textContent = category.title;
+    document.getElementById('result-category').textContent = category.subtitle;
+    document.getElementById('stat-score').textContent = score;
+    document.getElementById('stat-correct').textContent =
+      `${correctCount} / ${questions.length}`;
+    document.getElementById('stat-pct').textContent = `${pct}%`;
+
+    // .map() builds one <li> per answer, then join() merges them into one string
+    const summaryHTML = userAnswers.map(({ text, wasCorrect, chosen, correctAnswer }) => {
+      const dotClass = wasCorrect ? 'ok' : 'bad';
+      const detail = wasCorrect
+        ? `<strong>${chosen}</strong> ✓`
+        : `You said: <em>${chosen}</em> &nbsp;·&nbsp; Answer: <strong>${correctAnswer}</strong>`;
+      return `<li class="summary-item">
+        <span class="dot ${dotClass}"></span>
+        <span>${text} — ${detail}</span>
+      </li>`;
+    }).join('');
+
+    document.getElementById('summary-list').innerHTML = summaryHTML;
+  }
+
+  // ── RANK THE PLAYER ───────────────────────────────────────────────────────
+  function getCategory(pct) {
+    if (pct === 100) return { title: 'Perfect Score!',   subtitle: 'You nailed every single question. Legendary!' };
+    if (pct >= 80)   return { title: 'Quiz Champion',    subtitle: 'Amazing — you really know your stuff!' };
+    if (pct >= 60)   return { title: 'Good Job!',        subtitle: 'Solid effort. A bit more studying and you\'ll be unstoppable!' };
+    if (pct >= 40)   return { title: 'Keep Studying',    subtitle: 'You\'re getting there. Try again — you\'ll improve!' };
+    return               { title: 'Rough Round',        subtitle: 'Don\'t worry — everyone starts somewhere. Have another go!' };
+  }
+
+  // ── RESET BACK TO SPLASH ──────────────────────────────────────────────────
+  function resetQuiz() {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('splash').style.display = 'block';
+  }
+</script>
+</body>
+</html>

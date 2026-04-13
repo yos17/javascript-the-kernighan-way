@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mad Libs: The Quest for the Golden Sandwich</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #f093fb 100%);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    header h1 {
+      font-size: 2.4rem;
+      color: #fff;
+      text-shadow: 2px 3px 0px rgba(0, 0, 0, 0.2);
+    }
+
+    header p {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 1.05rem;
+      margin-top: 6px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 0.95rem;
+      color: #6c3fc7;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #f093fb;
+    }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 480px) {
+      .fields-grid {
+        grid-template-columns: 1fr;
+      }
+
+      header h1 {
+        font-size: 1.8rem;
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    label .hint {
+      font-weight: 400;
+      color: #aaa;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.78rem;
+    }
+
+    input[type="text"] {
+      border: 2px solid #e0d4f7;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 1rem;
+      color: #333;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+      background: #fafafe;
+      width: 100%;
+    }
+
+    input[type="text"]:focus {
+      border-color: #a78bfa;
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.25);
+      background: #fff;
+    }
+
+    input[type="text"]::placeholder {
+      color: #c4b5fd;
+      font-style: italic;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.15s;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    #generateBtn {
+      background: linear-gradient(135deg, #667eea, #a78bfa);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(102, 126, 234, 0.45);
+    }
+
+    #generateBtn:hover {
+      box-shadow: 0 6px 22px rgba(102, 126, 234, 0.6);
+    }
+
+    #clearBtn {
+      background: #f3f0ff;
+      color: #7c3aed;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+      flex: 0 0 auto;
+      padding: 14px 22px;
+    }
+
+    #clearBtn:hover {
+      background: #ede9fe;
+    }
+
+    #output-card {
+      display: none;
+    }
+
+    #output-card.visible {
+      display: block;
+    }
+
+    #output-card h2 {
+      border-color: #fbbf24;
+      color: #92400e;
+    }
+
+    #story-output {
+      font-size: 1.08rem;
+      line-height: 1.9;
+      color: #374151;
+    }
+
+    .highlight {
+      background: linear-gradient(120deg, #fef08a 0%, #fde68a 100%);
+      color: #92400e;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🥪 Mad Libs</h1>
+      <p>The Quest for the Golden Sandwich</p>
+    </header>
+
+    <div class="card">
+      <h2>Fill in the blanks — then hit Generate!</h2>
+      <div class="fields-grid">
+
+        <div class="field">
+          <label for="name">Hero's Name <span class="hint">(a person)</span></label>
+          <input type="text" id="name" placeholder="e.g. Zorbax the Mighty" />
+        </div>
+
+        <div class="field">
+          <label for="adjective1">Adjective <span class="hint">(describing word)</span></label>
+          <input type="text" id="adjective1" placeholder="e.g. slimy" />
+        </div>
+
+        <div class="field">
+          <label for="noun1">Noun <span class="hint">(a thing)</span></label>
+          <input type="text" id="noun1" placeholder="e.g. spatula" />
+        </div>
+
+        <div class="field">
+          <label for="verb">Verb — past tense <span class="hint">(an action)</span></label>
+          <input type="text" id="verb" placeholder="e.g. exploded" />
+        </div>
+
+        <div class="field">
+          <label for="place">Place <span class="hint">(real or made-up)</span></label>
+          <input type="text" id="place" placeholder="e.g. Mount Cheese" />
+        </div>
+
+        <div class="field">
+          <label for="adjective2">Another Adjective <span class="hint">(describing word)</span></label>
+          <input type="text" id="adjective2" placeholder="e.g. sparkly" />
+        </div>
+
+        <div class="field">
+          <label for="noun2">Another Noun <span class="hint">(a thing)</span></label>
+          <input type="text" id="noun2" placeholder="e.g. rubber duck" />
+        </div>
+
+      </div>
+
+      <div class="btn-row">
+        <button id="generateBtn" onclick="generate()">⚡ Generate Story!</button>
+        <button id="clearBtn" onclick="clearAll()">🗑 Clear</button>
+      </div>
+    </div>
+
+    <div class="card" id="output-card">
+      <h2>📖 Your Story</h2>
+      <p id="story-output"></p>
+    </div>
+  </div>
+
+  <script>
+    // --- Default values ---
+    // If the user leaves a field blank, we pick a random funny default.
+    // Each array below has four options so every empty run feels different.
+    const nameDefaults = [
+      'Zorbax the Mighty',
+      'Princess Noodlearms',
+      'Bob the Unstoppable',
+      'Captain Biscuit',
+    ];
+    const adjective1Defaults = [
+      'extremely slimy',
+      'suspiciously fluffy',
+      'aggressively purple',
+      'slightly crispy',
+    ];
+    const noun1Defaults = [
+      'enchanted spatula',
+      'bag of screaming gummy bears',
+      'talking stapler',
+      'glowing toilet plunger',
+    ];
+    const verbDefaults = [
+      'catapulted',
+      'moonwalked',
+      'sneezed dramatically',
+      'somersaulted',
+    ];
+    const placeDefaults = [
+      'Mount Cheese',
+      'the Forbidden Parking Lot',
+      'Volcano Island (the fake one)',
+      "Grandma's Basement of Doom",
+    ];
+    const adjective2Defaults = [
+      'aggressively sparkly',
+      'unbelievably soggy',
+      'dangerously wiggly',
+      'surprisingly minty',
+    ];
+    const noun2Defaults = [
+      'golden rubber duck',
+      'ancient cheese wheel',
+      'sacred gym sock',
+      'legendary pizza slice',
+    ];
+
+    // pickRandom returns one random element from an array.
+    const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    // h wraps a word in a <span> so CSS can color it differently.
+    const h = (word) => `<span class="highlight">${word}</span>`;
+
+    // generate is the main function — it runs when the button is clicked.
+    const generate = () => {
+      // Read each input field. If the field is empty (""), use a random default instead.
+      // document.getElementById('name') finds the <input id="name"> element.
+      // .value reads whatever text the user typed into it.
+      const name = document.getElementById('name').value.trim() || pickRandom(nameDefaults);
+      const adjective1 = document.getElementById('adjective1').value.trim() || pickRandom(adjective1Defaults);
+      const noun1 = document.getElementById('noun1').value.trim() || pickRandom(noun1Defaults);
+      const verb = document.getElementById('verb').value.trim() || pickRandom(verbDefaults);
+      const place = document.getElementById('place').value.trim() || pickRandom(placeDefaults);
+      const adjective2 = document.getElementById('adjective2').value.trim() || pickRandom(adjective2Defaults);
+      const noun2 = document.getElementById('noun2').value.trim() || pickRandom(noun2Defaults);
+
+      // Build the story using a template literal (backtick string).
+      // ${name} inserts the value of the variable called name right into the text.
+      // h(name) wraps the word in a <span class="highlight"> so it shows up yellow.
+      const story = `
+        Once upon a Tuesday, the brave hero ${h(name)} woke up to discover that their bedroom
+        was completely filled with ${h(adjective1)} soup. Nobody knew how it got there.
+        Floating on top of the soup was a mysterious ${h(noun1)} with a note attached.
+        The note read: <em>"The Golden Sandwich has been hidden in ${h(place)}.
+        Only the one who carries the ${h(noun1)} can claim it. You have until lunch."</em>
+        <br><br>
+        Without hesitating for even a second, ${h(name)} grabbed the ${h(noun1)},
+        ${h(verb)} out the front door, and landed face-first in the neighbor's garden.
+        The neighbor's cat — a ${h(adjective1)} tabby named Gerald — stared judgmentally
+        and said absolutely nothing, because cats cannot talk. But it felt judgy.
+        <br><br>
+        After a ${h(adjective2)} journey across three counties, one shopping mall,
+        and a suspiciously long escalator, ${h(name)} finally arrived at ${h(place)}.
+        There it was: the legendary ${h(noun2)}, glowing on a pedestal made entirely of bread crusts.
+        <br><br>
+        But guarding the ${h(noun2)} was a ${h(adjective2)} dragon named Kevin, who immediately
+        burst into tears and said he'd been waiting <em>forever</em> for someone to find it so he
+        could finally go home. ${h(name)} gave Kevin a high-five, took the ${h(noun2)},
+        and ${h(verb)} all the way back home in time for lunch.
+        <br><br>
+        And the Golden Sandwich? It tasted like peanut butter. Not even fancy peanut butter.
+        Just regular peanut butter. But somehow, it was the best thing ${h(name)} had ever eaten.
+        <br><br>
+        <strong>THE END.</strong> 🥪
+      `;
+
+      // innerHTML sets the HTML inside an element — not just plain text, but actual tags.
+      // We need innerHTML (not textContent) because our story contains <span> and <br> tags.
+      document.getElementById('story-output').innerHTML = story;
+
+      // Show the output card (it starts hidden via CSS display:none).
+      const outputCard = document.getElementById('output-card');
+      outputCard.classList.add('visible');
+
+      // Smoothly scroll down so the story is visible on screen.
+      outputCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    // clearAll resets every input field and hides the story.
+    const clearAll = () => {
+      const fieldIds = ['name', 'adjective1', 'noun1', 'verb', 'place', 'adjective2', 'noun2'];
+      fieldIds.forEach((id) => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('story-output').innerHTML = '';
+      document.getElementById('output-card').classList.remove('visible');
+    };
+  </script>
+</body>
+</html>

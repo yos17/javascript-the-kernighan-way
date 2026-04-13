@@ -1,0 +1,152 @@
+<\!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creature Card Builder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 20px; font-size: 1.8rem; }
+
+  .builder { max-width: 480px; margin: 0 auto 30px; background: #16213e; padding: 20px; border-radius: 12px; }
+  .builder label { display: block; font-size: 0.85rem; margin-bottom: 4px; color: #aaa; }
+  .builder input, .builder select { width: 100%; padding: 8px 10px; margin-bottom: 12px; border: 1px solid #333; border-radius: 6px; background: #0f3460; color: #eee; font-size: 0.95rem; }
+  .builder button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #e94560; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
+  .builder button:hover { transform: scale(1.02); }
+
+  .stat-row { display: flex; gap: 10px; }
+  .stat-row > div { flex: 1; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; max-width: 1100px; margin: 0 auto; }
+
+  .card { border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.4); transition: transform 0.2s; }
+  .card:hover { transform: translateY(-4px); }
+  .card-header { padding: 14px 16px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .card-header h2 { font-size: 1.2rem; }
+  .card-hp { font-weight: 700; font-size: 1.1rem; }
+  .card-art { height: 120px; margin: 0 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 4rem; background: rgba(255,255,255,0.15); }
+  .card-type { padding: 6px 16px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .card-stats { display: flex; justify-content: space-around; padding: 12px 16px 16px; }
+  .card-stats div { text-align: center; }
+  .card-stats .label { font-size: 0.7rem; text-transform: uppercase; opacity: 0.7; }
+  .card-stats .value { font-size: 1.3rem; font-weight: 700; }
+  .card-remove { background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 1.2rem; padding: 0; width: auto; margin: 0; }
+  .card-remove:hover { color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>🐲 Creature Card Builder</h1>
+
+<div class="builder">
+  <label for="name">Creature Name</label>
+  <input type="text" id="name" placeholder="e.g. Flamepaw" maxlength="20">
+
+  <label for="type">Type</label>
+  <select id="type">
+    <option value="fire">🔥 Fire</option>
+    <option value="water">💧 Water</option>
+    <option value="grass">🌿 Grass</option>
+    <option value="electric">⚡ Electric</option>
+    <option value="dark">🌑 Dark</option>
+    <option value="psychic">🔮 Psychic</option>
+  </select>
+
+  <div class="stat-row">
+    <div><label for="hp">HP</label><input type="number" id="hp" value="60" min="10" max="200"></div>
+    <div><label for="attack">Attack</label><input type="number" id="attack" value="50" min="5" max="150"></div>
+    <div><label for="defense">Defense</label><input type="number" id="defense" value="40" min="5" max="150"></div>
+  </div>
+
+  <button onclick="createCreature()">Add Creature Card</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const TYPE_DATA = {
+  fire:     { color: '#c0392b', bg: '#e74c3c', emoji: '🔥' },
+  water:    { color: '#2471a3', bg: '#3498db', emoji: '💧' },
+  grass:    { color: '#1e8449', bg: '#27ae60', emoji: '🌿' },
+  electric: { color: '#b7950b', bg: '#f1c40f', emoji: '⚡' },
+  dark:     { color: '#2c3e50', bg: '#34495e', emoji: '🌑' },
+  psychic:  { color: '#7d3c98', bg: '#9b59b6', emoji: '🔮' },
+};
+
+const creatures = [];
+
+function createCreature() {
+  const name = document.getElementById('name').value.trim();
+  if (\!name) return alert('Give your creature a name\!');
+
+  const type = document.getElementById('type').value;
+  const hp = Math.min(200, Math.max(10, +document.getElementById('hp').value));
+  const attack = Math.min(150, Math.max(5, +document.getElementById('attack').value));
+  const defense = Math.min(150, Math.max(5, +document.getElementById('defense').value));
+
+  const creature = {
+    name,
+    type,
+    hp,
+    stats: { attack, defense },
+    id: Date.now(),
+    describe() {
+      return `${this.name} is a ${this.type}-type with ${this.hp} HP.`;
+    },
+  };
+
+  creatures.push(creature);
+  renderCards();
+  document.getElementById('name').value = '';
+}
+
+function removeCreature(id) {
+  const index = creatures.findIndex(c => c.id === id);
+  if (index \!== -1) creatures.splice(index, 1);
+  renderCards();
+}
+
+function renderCards() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  for (const creature of creatures) {
+    const { name, type, hp, stats, id } = creature;
+    const { color, bg, emoji } = TYPE_DATA[type];
+    const { attack, defense } = stats;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.background = `linear-gradient(135deg, ${bg}, ${color})`;
+
+    card.innerHTML = `
+      <div class="card-header">
+        <h2>${name}</h2>
+        <span class="card-hp">HP ${hp}</span>
+      </div>
+      <div class="card-art">${emoji}</div>
+      <div class="card-type">${type} type</div>
+      <div class="card-stats">
+        <div><div class="label">Attack</div><div class="value">${attack}</div></div>
+        <div><div class="label">Defense</div><div class="value">${defense}</div></div>
+        <div><div class="label">Total</div><div class="value">${hp + attack + defense}</div></div>
+      </div>
+    `;
+
+    const btn = document.createElement('button');
+    btn.className = 'card-remove';
+    btn.textContent = '✕';
+    btn.onclick = () => removeCreature(id);
+    card.querySelector('.card-header').appendChild(btn);
+
+    grid.appendChild(card);
+  }
+}
+
+// Start with a sample creature
+document.getElementById('name').value = 'Flamepaw';
+createCreature();
+</script>
+</body>
+</html>
