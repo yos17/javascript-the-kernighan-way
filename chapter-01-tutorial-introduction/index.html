@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chapter 1 — A Tutorial Introduction</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Georgia", serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      color: #a8d8ea;
+      margin-bottom: 0.25rem;
+      letter-spacing: 0.04em;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+      font-style: italic;
+    }
+
+    .section {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section h2 {
+      font-size: 1rem;
+      color: #e94560;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      color: #a8d8ea;
+      font-size: 0.85rem;
+      margin-bottom: 0.3rem;
+      margin-top: 0.75rem;
+    }
+
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #0d0d1a;
+      border: 1px solid #0f3460;
+      color: #e0e0e0;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      font-family: "Courier New", monospace;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus { border-color: #e94560; }
+
+    button {
+      margin-top: 1rem;
+      background: #e94560;
+      color: white;
+      border: none;
+      padding: 0.6rem 1.4rem;
+      border-radius: 4px;
+      font-family: "Georgia", serif;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #c73652; }
+
+    .output {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #0d0d1a;
+      border-left: 3px solid #e94560;
+      border-radius: 0 4px 4px 0;
+      font-family: "Courier New", monospace;
+      font-size: 0.9rem;
+      color: #a8d8ea;
+      white-space: pre-wrap;
+      min-height: 2rem;
+    }
+
+    .log-entry {
+      padding: 0.15rem 0;
+      color: #7fba00;
+    }
+
+    .log-entry:before {
+      content: "> ";
+      color: #666;
+    }
+
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: "Courier New", monospace;
+      font-size: 0.85rem;
+    }
+
+    table.data th {
+      color: #e94560;
+      text-align: left;
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid #0f3460;
+    }
+
+    table.data td {
+      padding: 0.3rem 0.6rem;
+      color: #e0e0e0;
+    }
+
+    table.data tr:hover td { background: #0f3460; }
+
+    .code-sample {
+      background: #0d0d1a;
+      padding: 0.75rem 1rem;
+      border-radius: 4px;
+      font-family: "Courier New", monospace;
+      font-size: 0.82rem;
+      color: #ccc;
+      margin-top: 0.75rem;
+      margin-bottom: 0.5rem;
+      border-left: 3px solid #0f3460;
+    }
+
+    .kw { color: #e94560; }
+    .fn { color: #a8d8ea; }
+    .str { color: #7fba00; }
+    .num { color: #f7b731; }
+    .cm { color: #555; font-style: italic; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .fizzbuzz-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      margin-top: 0.75rem;
+    }
+
+    .fb-cell {
+      padding: 4px 2px;
+      text-align: center;
+      font-family: "Courier New", monospace;
+      font-size: 0.72rem;
+      border-radius: 3px;
+      background: #0d0d1a;
+    }
+
+    .fb-fizz { background: #1a3a2e; color: #7fba00; }
+    .fb-buzz { background: #1a1a3a; color: #a8d8ea; }
+    .fb-fizzbuzz { background: #3a1a2e; color: #e94560; }
+    .fb-num { color: #888; }
+  </style>
+</head>
+<body>
+
+<h1>Chapter 1 — A Tutorial Introduction</h1>
+<p class="subtitle">JavaScript: The Kernighan Way</p>
+
+<div class="grid-2">
+
+  <!-- CELSIUS TO FAHRENHEIT -->
+  <div class="section">
+    <h2>1.10 — Temperature Converter</h2>
+    <div class="code-sample">
+<span class="kw">function</span> <span class="fn">celsiusToFahrenheit</span>(c) {<br>
+&nbsp;&nbsp;<span class="kw">return</span> (c * <span class="num">9</span> / <span class="num">5</span>) + <span class="num">32</span>;<br>
+}
+    </div>
+    <label>Celsius</label>
+    <input type="number" id="celsius" value="100" step="any">
+    <button onclick="convertTemp()">Convert</button>
+    <div class="output" id="tempOutput"></div>
+  </div>
+
+  <!-- FIZZBUZZ -->
+  <div class="section">
+    <h2>1.8 — FizzBuzz (1–100)</h2>
+    <div class="code-sample">
+<span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">1</span>; i &lt;= <span class="num">100</span>; i++) {<br>
+&nbsp;&nbsp;<span class="kw">if</span> (i % <span class="num">15</span> === <span class="num">0</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="fn">console</span>.<span class="fn">log</span>(<span class="str">"FizzBuzz"</span>);<br>
+&nbsp;&nbsp;<span class="kw">else if</span> (i % <span class="num">3</span> === <span class="num">0</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="fn">console</span>.<span class="fn">log</span>(<span class="str">"Fizz"</span>);<br>
+&nbsp;&nbsp;<span class="kw">else if</span> (i % <span class="num">5</span> === <span class="num">0</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="fn">console</span>.<span class="fn">log</span>(<span class="str">"Buzz"</span>);<br>
+&nbsp;&nbsp;<span class="kw">else</span> <span class="fn">console</span>.<span class="fn">log</span>(i);<br>
+}
+    </div>
+    <div class="fizzbuzz-grid" id="fizzBuzzGrid"></div>
+  </div>
+
+  <!-- SUM 1..N -->
+  <div class="section">
+    <h2>1.4 — Sum of 1 to N</h2>
+    <div class="code-sample">
+<span class="kw">let</span> sum = <span class="num">0</span>;<br>
+<span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">1</span>; i &lt;= n; i++)<br>
+&nbsp;&nbsp;sum += i;
+    </div>
+    <label>N</label>
+    <input type="number" id="sumN" value="100" min="1" max="10000">
+    <button onclick="computeSum()">Compute</button>
+    <div class="output" id="sumOutput"></div>
+  </div>
+
+  <!-- PRIMES (Exercise 1-5) -->
+  <div class="section">
+    <h2>Exercise 1-5 — Primes below N</h2>
+    <div class="code-sample">
+<span class="kw">function</span> <span class="fn">isPrime</span>(n) {<br>
+&nbsp;&nbsp;<span class="kw">if</span> (n &lt; <span class="num">2</span>) <span class="kw">return false</span>;<br>
+&nbsp;&nbsp;<span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">2</span>; i * i &lt;= n; i++)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">if</span> (n % i === <span class="num">0</span>) <span class="kw">return false</span>;<br>
+&nbsp;&nbsp;<span class="kw">return true</span>;<br>
+}
+    </div>
+    <label>Find primes below</label>
+    <input type="number" id="primeLimit" value="100" min="2" max="10000">
+    <button onclick="findPrimes()">Find Primes</button>
+    <div class="output" id="primesOutput"></div>
+  </div>
+
+  <!-- COMPOUND INTEREST (Exercise 1-4) -->
+  <div class="section" style="grid-column: 1 / -1;">
+    <h2>Exercise 1-4 — Compound Interest Table</h2>
+    <div class="code-sample">
+<span class="kw">function</span> <span class="fn">compoundInterest</span>(P, r, n, t) {<br>
+&nbsp;&nbsp;<span class="kw">return</span> P * Math.<span class="fn">pow</span>(<span class="num">1</span> + r / n, n * t);<br>
+}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-top:0.5rem;">
+      <div><label>Principal ($)</label><input type="number" id="ciP" value="1000"></div>
+      <div><label>Annual Rate (%)</label><input type="number" id="ciR" value="5" step="0.1"></div>
+      <div><label>Compounds/year</label><input type="number" id="ciN" value="12"></div>
+      <div><label>Years</label><input type="number" id="ciT" value="10"></div>
+    </div>
+    <button onclick="buildInterestTable()">Build Table</button>
+    <div id="interestTableContainer" style="margin-top:1rem;overflow-x:auto;"></div>
+  </div>
+
+</div>
+
+<script>
+  // ── 1.10 Temperature Converter ──────────────────────────────────────────────
+  function celsiusToFahrenheit(c) {
+    return (c * 9 / 5) + 32;
+  }
+
+  function convertTemp() {
+    const c = parseFloat(document.getElementById("celsius").value);
+    if (isNaN(c)) {
+      document.getElementById("tempOutput").textContent = "Enter a number.";
+      return;
+    }
+    const f = celsiusToFahrenheit(c);
+    document.getElementById("tempOutput").textContent =
+      `${c}°C  =  ${f.toFixed(2)}°F`;
+  }
+
+  convertTemp();
+
+  // ── 1.8 FizzBuzz ─────────────────────────────────────────────────────────────
+  (function buildFizzBuzz() {
+    const grid = document.getElementById("fizzBuzzGrid");
+    for (let i = 1; i <= 100; i++) {
+      const cell = document.createElement("div");
+      cell.className = "fb-cell";
+      if (i % 15 === 0) {
+        cell.textContent = "FB";
+        cell.classList.add("fb-fizzbuzz");
+      } else if (i % 3 === 0) {
+        cell.textContent = "F";
+        cell.classList.add("fb-fizz");
+      } else if (i % 5 === 0) {
+        cell.textContent = "B";
+        cell.classList.add("fb-buzz");
+      } else {
+        cell.textContent = i;
+        cell.classList.add("fb-num");
+      }
+      grid.appendChild(cell);
+    }
+  })();
+
+  // ── 1.4 Sum ──────────────────────────────────────────────────────────────────
+  function computeSum() {
+    const n = parseInt(document.getElementById("sumN").value, 10);
+    if (isNaN(n) || n < 1) {
+      document.getElementById("sumOutput").textContent = "Enter a positive integer.";
+      return;
+    }
+    let sum = 0;
+    for (let i = 1; i <= n; i++) sum += i;
+    const formula = n * (n + 1) / 2;   // Gauss's closed form
+    document.getElementById("sumOutput").textContent =
+      `Loop result: ${sum}\nGauss formula n(n+1)/2: ${formula}`;
+  }
+
+  computeSum();
+
+  // ── Exercise 1-5 Primes ───────────────────────────────────────────────────────
+  function isPrime(n) {
+    if (n < 2) return false;
+    for (let i = 2; i * i <= n; i++)
+      if (n % i === 0) return false;
+    return true;
+  }
+
+  function findPrimes() {
+    const limit = parseInt(document.getElementById("primeLimit").value, 10);
+    if (isNaN(limit) || limit < 2) {
+      document.getElementById("primesOutput").textContent = "Enter an integer >= 2.";
+      return;
+    }
+    const primes = [];
+    for (let i = 2; i < limit; i++)
+      if (isPrime(i)) primes.push(i);
+    document.getElementById("primesOutput").textContent =
+      `Found ${primes.length} primes:\n${primes.join("  ")}`;
+  }
+
+  findPrimes();
+
+  // ── Exercise 1-4 Compound Interest ───────────────────────────────────────────
+  function compoundInterest(P, r, n, t) {
+    return P * Math.pow(1 + r / n, n * t);
+  }
+
+  function buildInterestTable() {
+    const P = parseFloat(document.getElementById("ciP").value);
+    const r = parseFloat(document.getElementById("ciR").value) / 100;
+    const n = parseFloat(document.getElementById("ciN").value);
+    const t = parseInt(document.getElementById("ciT").value, 10);
+
+    let html = '<table class="data"><thead><tr>';
+    html += "<th>Year</th><th>Balance</th><th>Interest Earned</th><th>Growth</th>";
+    html += "</tr></thead><tbody>";
+
+    for (let year = 1; year <= t; year++) {
+      const balance = compoundInterest(P, r, n, year);
+      const earned = balance - P;
+      const growth = ((balance / P - 1) * 100).toFixed(2);
+      html += `<tr>
+        <td>${year}</td>
+        <td>$${balance.toFixed(2)}</td>
+        <td>$${earned.toFixed(2)}</td>
+        <td>${growth}%</td>
+      </tr>`;
+    }
+
+    html += "</tbody></table>";
+    document.getElementById("interestTableContainer").innerHTML = html;
+  }
+
+  buildInterestTable();
+</script>
+</body>
+</html>

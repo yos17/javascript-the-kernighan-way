@@ -1,135 +1,98 @@
 # JavaScript: The Kernighan Way
 
-## Learn JavaScript by Building Real Programs
-
-> *"The only way to learn a new programming language is by writing programs in it."*
-> — Brian W. Kernighan & Dennis M. Ritchie, *The C Programming Language*
+**Learn JavaScript by Building Real Programs**
 
 ---
 
-## What This Book Is
+## Your Mission, Should You Choose to Accept It
 
-This book teaches JavaScript the way Brian Kernighan taught C: by building real programs from the very first page. There are no contrived toy examples, no endless theory before you touch code, and no "hello world" that does nothing interesting.
+Brian Kernighan taught a generation of programmers with a simple idea: *you learn to program by writing programs*. Not by memorizing syntax tables. Not by reading about theory. You learn by building something real, breaking it, fixing it, and making it your own.
 
-By Chapter 1 you will have a working Mad Libs generator running in your browser. By Chapter 4 you will have built a password generator with a live strength meter. By Chapter 12 you will have built a multiplayer quiz game that two people can play together.
+This book takes that idea and turns it into **12 missions**.
 
-Every concept is introduced *because a program needs it*. You learn `if/else` because your Choose Your Adventure game needs to branch. You learn arrays because your quiz game needs to store questions. You learn functions because your password generator needs to do the same thing in many different ways.
+Each mission drops you into a scenario: a broken machine at the school fair, a dungeon that needs a map, a spy agency that needs a password generator. Your job is to write the code that saves the day. Along the way, you'll learn every major concept in JavaScript — not because a textbook says so, but because your mission demands it.
 
-This is how real programmers learn.
+No concept is introduced "for completeness." If it's in this book, it's because a real program needed it to work.
 
----
+## How Missions Work
 
-## The Philosophy
+Every chapter is a **mission** with this structure:
 
-Kernighan and Ritchie's *The C Programming Language* (1978) taught a generation of programmers by showing complete, working programs from page one. Not toy snippets — real programs that did real things.
+1. **Mission Briefing** — The story. What's broken, what's at stake, why YOU need to fix it.
+2. **Starter Code** — A partially working program with `// TODO` comments showing what you need to build. Not blank. Not complete. Just enough to get you going.
+3. **Challenges** — 3–5 progressive steps that build toward the complete program. Each one gets you closer to mission success.
+4. **Hints** — Stuck? Every challenge has three levels of help:
+   - 🤔 **Think About It** — A guiding question
+   - 💡 **Hint** — A more specific nudge
+   - 🔓 **Solution** — The complete code
+5. **The Complete Program** — What the finished mission looks like (also the standalone `.html` file in the folder).
+6. **Bonus Missions** — Extra challenges for agents who want more.
+7. **What You Unlocked** — Skills and abilities you've gained, like leveling up in a game.
+8. **Building with Claude** — Prompts to extend your program with AI.
 
-This book applies that philosophy to JavaScript. Each chapter builds one complete program. The program introduces exactly the concepts you need to build it, in the order you need them. By the end, you have written twelve programs and learned JavaScript properly.
+## What You Need
 
-The programs get progressively more ambitious. Chapter 1 is a Mad Libs generator. Chapter 12 is a multiplayer quiz game. Every chapter in between adds tools to your toolkit.
+Two things:
 
-Open a chapter. Run the program in your browser. Read the code. Change something. Break it. Fix it. That is how you learn to code.
+1. **A web browser** — Chrome, Firefox, Safari, Edge. You already have one.
+2. **A text editor** — [VS Code](https://code.visualstudio.com/) is free and excellent. Notepad works too.
 
----
+That's it. No installing Node. No package managers. No terminal commands. Every program is a single HTML file you double-click to run.
 
-## Who This Book Is For
+## Mission Log (Table of Contents)
 
-Anyone who is roughly 12 years old (or older) and wants to learn programming. No prior experience needed. No special software beyond a browser and a text editor.
-
----
-
-## Requirements
-
-**Browser:** Any modern browser — Chrome, Firefox, Safari, or Edge (updated in the last two years).
-
-**Text Editor:** Any text editor works:
-- [Visual Studio Code](https://code.visualstudio.com/) — free, excellent, most popular
-- [Notepad++](https://notepad-plus-plus.org/) — Windows, lightweight
-- Notepad or TextEdit — already on your computer
-
-**That's it.** Open the `.html` file in a browser. Edit it in your text editor. Save, refresh. That's the whole workflow.
-
----
-
-## Table of Contents
-
-| # | Chapter | Project | Key Concepts |
-|---|---------|---------|--------------|
-| 1 | [Hello, Browser](chapters/01_hello_browser/) | Mad Libs Generator | variables, template literals, getElementById, innerHTML |
-| 2 | [Decisions](chapters/02_decisions/) | Choose Your Adventure | if/else, comparisons, logical operators, ternary, switch |
-| 3 | [Loops and Arrays](chapters/03_loops_and_arrays/) | Quiz Game | arrays, for/for...of loops, .map, .filter, .forEach |
-| 4 | [Functions](chapters/04_functions/) | Password Generator | declarations, arrow functions, parameters, scope |
-| 5 | Objects | Creature Card Builder | object literals, properties, methods, destructuring, JSON |
-| 6 | The DOM | To-Do List | querySelector, createElement, appendChild, classList |
-| 7 | Events and Forms | Calculator | addEventListener, form events, keyboard events, validation |
-| 8 | Canvas | Drawing App | canvas API, 2D context, paths, colors, mouse tracking |
-| 9 | Animation | Breakout Game | requestAnimationFrame, game loops, collision detection |
-| 10 | Async / Fetch | Weather Dashboard | fetch, Promises, async/await, JSON APIs, error handling |
-| 11 | Sound | Drum Machine | Web Audio API, AudioContext, oscillators, scheduling |
-| 12 | Final Project | Multiplayer Quiz | localStorage, BroadcastChannel, putting it all together |
-
----
+| Mission | Codename | You Build | Skills You Unlock |
+|---------|----------|-----------|-------------------|
+| 1 | [Hello, Browser](chapters/01_hello_browser/) | Mad Libs generator | Variables, strings, template literals, basic DOM |
+| 2 | [Decisions](chapters/02_decisions/) | Choose Your Adventure story engine | if/else, comparisons, logical operators, switch |
+| 3 | [Loops and Arrays](chapters/03_loops_and_arrays/) | Quiz game with scoring | Arrays, for loops, .map/.filter/.forEach |
+| 4 | [Functions](chapters/04_functions/) | Password generator with strength meter | Functions, arrow functions, parameters, scope |
+| 5 | Objects | Creature card builder | Object literals, properties, methods, this |
+| 6 | The DOM | Dynamic to-do list | querySelector, createElement, event delegation |
+| 7 | Events and Forms | Calculator app | Event listeners, form validation, keyboard events |
+| 8 | Canvas and Drawing | Drawing app | Canvas API, mouse tracking, color and stroke |
+| 9 | Animation and Games | Breakout clone | requestAnimationFrame, collision detection, game loops |
+| 10 | Async and APIs | Weather dashboard | fetch, promises, async/await, JSON |
+| 11 | Sound and Media | Drum machine | Web Audio API, media elements, timing |
+| 12 | The Final Project | Multiplayer quiz game | WebSockets, modules, putting it all together |
 
 ## Code Conventions
 
-Every program in this book is a single `.html` file with embedded CSS and JavaScript. No build tools. No npm. No configuration files. Just code you can read in one sitting.
+All code uses **modern JavaScript (ES2024+)**:
 
-**Why single files?** Because you are learning JavaScript, not toolchains. Build tools are useful once you know what you are building. They add complexity that gets in the way of learning.
+- `const` and `let` — never `var`
+- Arrow functions `() => {}` where they make code clearer
+- Template literals `` `Hello, ${name}!` `` instead of string concatenation
+- Destructuring, spread operators, and optional chaining where they simplify code
+- `for...of` loops for clean iteration
+- Semantic HTML5 elements
+- CSS custom properties for theming
 
-**JavaScript version:** Modern JavaScript (ES2020+) throughout — `const`, `let`, arrow functions, template literals, optional chaining, destructuring, async/await. There is no reason to learn old-style JavaScript first.
-
-```javascript
-// Variables: const by default, let when the value must change
-const playerName = 'Joanna';
-let score = 0;
-
-// Arrow functions for short, single-purpose operations
-const double = n => n * 2;
-
-// Named function declarations for multi-line, reusable logic
-function calculateScore(answers, timeLeft) {
-  const bonus = timeLeft > 10 ? 50 : 0;
-  return answers.filter(a => a.correct).length * 100 + bonus;
-}
-
-// Template literals when inserting values into strings
-const message = `${playerName} scored ${score} points!`;
-
-// Destructuring when pulling multiple values from an object
-const { name, type, hp } = creature;
-
-// Array methods over manual index loops
-const passing = scores.filter(s => s >= 60);
-const names = players.map(p => p.name);
-```
-
-Two-space indentation. Semicolons always. Comments explain *why*, not *what* — if the code reads clearly, it does not need a comment.
-
----
+Every program is a **single HTML file** with embedded `<style>` and `<script>` tags. This isn't how professional apps are built, but it's the fastest way to go from zero to a working program. By Mission 12, you'll understand why professionals split things up — and you'll be ready to do it yourself.
 
 ## Building with Claude
 
-Each chapter ends with a "Building with Claude" section — prompts you can paste into [Claude](https://claude.ai) to extend the project. This is not cheating. It is how professional programmers work today.
+Every mission ends with a **"Building with Claude"** section — prompts you can paste into [Claude](https://claude.ai) to take your program further. Claude is an AI assistant that's great at helping you code.
 
-The key is that you must understand every line before you use it. After finishing a chapter, you know enough to evaluate what Claude produces. If it does something unexpected, you know enough to fix it. If it writes code you do not understand, ask it to explain. Then change one thing and see what breaks.
+Here's how to get the most out of it:
 
-Example prompt after Chapter 4 (Password Generator):
+- **Show your code.** Paste your current program and say "I built this. Now I want to add [feature]."
+- **Ask why, not just how.** "Why does this use `const` instead of `let`?" teaches you more than "Make this work."
+- **Debug together.** Paste an error message and your code. Claude will explain what went wrong.
+- **Go beyond the missions.** The prompts are starting points. Follow your curiosity.
 
-> *"I have a JavaScript password generator (code below). Add a feature that checks whether the generated password appears in a list of the 100 most common passwords and shows a warning if it does. Explain each addition you make."*
-
-That is the workflow: you build the foundation, Claude helps you extend it, you understand and own the result.
-
----
+The goal isn't to have Claude write code for you — it's to have a patient partner who can answer your questions at 2 AM when no teacher is around.
 
 ## Getting Started
 
 ```bash
 git clone https://github.com/yos17/javascript-the-kernighan-way.git
 cd javascript-the-kernighan-way
-open chapters/01_hello_browser/mad_libs.html   # macOS
-# Windows: double-click the file in Explorer
-# Linux: xdg-open chapters/01_hello_browser/mad_libs.html
 ```
 
-Open `chapters/01_hello_browser/mad_libs.html` in your browser. It already works. Read the code. Then read Chapter 1.
+Open `chapters/01_hello_browser/starter.html` in your text editor. Read the mission briefing. Start coding. Good luck, agent.
 
-See you there.
+---
+
+*"The only way to learn a new programming language is by writing programs in it."*
+— Brian W. Kernighan & Dennis M. Ritchie, *The C Programming Language* (1978)

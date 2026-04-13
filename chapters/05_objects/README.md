@@ -1,286 +1,448 @@
 # Chapter 5: Objects
 
-JavaScript objects let you bundle related data and behavior together. Instead of tracking a creature's name, type, and stats as separate variables, you wrap them into one thing — and that thing can even know how to describe itself.
+Objects are collections of related data and behavior grouped together. In JavaScript, an object is a set of key-value pairs—think of it like a creature with a name, stats, and abilities all packed into one thing. Objects let you organize code so it's cleaner and easier to manage.
 
-We'll build a **Pokémon-style Creature Card Builder** where every creature is a JavaScript object, and the cards display type-based color schemes pulled from nested data.
+## The Program: Creature Card Builder
 
----
+This is a Pokémon-style card builder. You create creatures by choosing a name, type (fire, water, grass, electric, dark, psychic), and stats (HP, attack, defense). The app displays each creature as a colorful card with stats and lets you delete cards. It demonstrates objects, nested objects, destructuring, and lookup tables.
 
-## The Program
+## The Complete Program
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Creature Card Builder</title>
-  <style>
-    /* ... see creature_cards.html for full styles ... */
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creature Card Builder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 20px; font-size: 1.8rem; }
+
+  .builder { max-width: 480px; margin: 0 auto 30px; background: #16213e; padding: 20px; border-radius: 12px; }
+  .builder label { display: block; font-size: 0.85rem; margin-bottom: 4px; color: #aaa; }
+  .builder input, .builder select { width: 100%; padding: 8px 10px; margin-bottom: 12px; border: 1px solid #333; border-radius: 6px; background: #0f3460; color: #eee; font-size: 0.95rem; }
+  .builder button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #e94560; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
+  .builder button:hover { transform: scale(1.02); }
+
+  .stat-row { display: flex; gap: 10px; }
+  .stat-row > div { flex: 1; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; max-width: 1100px; margin: 0 auto; }
+
+  .card { border-radius: 14px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.4); transition: transform 0.2s; }
+  .card:hover { transform: translateY(-4px); }
+  .card-header { padding: 14px 16px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .card-header h2 { font-size: 1.2rem; }
+  .card-hp { font-weight: 700; font-size: 1.1rem; }
+  .card-art { height: 120px; margin: 0 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 4rem; background: rgba(255,255,255,0.15); }
+  .card-type { padding: 6px 16px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .card-stats { display: flex; justify-content: space-around; padding: 12px 16px 16px; }
+  .card-stats div { text-align: center; }
+  .card-stats .label { font-size: 0.7rem; text-transform: uppercase; opacity: 0.7; }
+  .card-stats .value { font-size: 1.3rem; font-weight: 700; }
+  .card-remove { background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 1.2rem; padding: 0; width: auto; margin: 0; }
+  .card-remove:hover { color: #fff; }
+</style>
 </head>
 <body>
-<!-- see creature_cards.html -->
+
+<h1>Creature Card Builder</h1>
+
+<div class="builder">
+  <label for="name">Creature Name</label>
+  <input type="text" id="name" placeholder="e.g. Flamepaw" maxlength="20">
+
+  <label for="type">Type</label>
+  <select id="type">
+    <option value="fire">Fire</option>
+    <option value="water">Water</option>
+    <option value="grass">Grass</option>
+    <option value="electric">Electric</option>
+    <option value="dark">Dark</option>
+    <option value="psychic">Psychic</option>
+  </select>
+
+  <div class="stat-row">
+    <div><label for="hp">HP</label><input type="number" id="hp" value="60" min="10" max="200"></div>
+    <div><label for="attack">Attack</label><input type="number" id="attack" value="50" min="5" max="150"></div>
+    <div><label for="defense">Defense</label><input type="number" id="defense" value="40" min="5" max="150"></div>
+  </div>
+
+  <button onclick="createCreature()">Add Creature Card</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const TYPE_DATA = {
+  fire:     { color: '#c0392b', bg: '#e74c3c', emoji: '🔥' },
+  water:    { color: '#2471a3', bg: '#3498db', emoji: '💧' },
+  grass:    { color: '#1e8449', bg: '#27ae60', emoji: '🌿' },
+  electric: { color: '#b7950b', bg: '#f1c40f', emoji: '⚡' },
+  dark:     { color: '#2c3e50', bg: '#34495e', emoji: '🌑' },
+  psychic:  { color: '#7d3c98', bg: '#9b59b6', emoji: '🔮' },
+};
+
+const creatures = [];
+
+function createCreature() {
+  const name = document.getElementById('name').value.trim();
+  if (!name) return alert('Give your creature a name!');
+
+  const type = document.getElementById('type').value;
+  const hp = Math.min(200, Math.max(10, +document.getElementById('hp').value));
+  const attack = Math.min(150, Math.max(5, +document.getElementById('attack').value));
+  const defense = Math.min(150, Math.max(5, +document.getElementById('defense').value));
+
+  const creature = {
+    name,
+    type,
+    hp,
+    stats: { attack, defense },
+    id: Date.now(),
+    describe() {
+      return `${this.name} is a ${this.type}-type with ${this.hp} HP.`;
+    },
+  };
+
+  creatures.push(creature);
+  renderCards();
+  document.getElementById('name').value = '';
+}
+
+function removeCreature(id) {
+  const index = creatures.findIndex(c => c.id === id);
+  if (index !== -1) creatures.splice(index, 1);
+  renderCards();
+}
+
+function renderCards() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  for (const creature of creatures) {
+    const { name, type, hp, stats, id } = creature;
+    const { color, bg, emoji } = TYPE_DATA[type];
+    const { attack, defense } = stats;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.background = `linear-gradient(135deg, ${bg}, ${color})`;
+
+    card.innerHTML = `
+      <div class="card-header">
+        <h2>${name}</h2>
+        <span class="card-hp">HP ${hp}</span>
+      </div>
+      <div class="card-art">${emoji}</div>
+      <div class="card-type">${type} type</div>
+      <div class="card-stats">
+        <div><div class="label">Attack</div><div class="value">${attack}</div></div>
+        <div><div class="label">Defense</div><div class="value">${defense}</div></div>
+        <div><div class="label">Total</div><div class="value">${hp + attack + defense}</div></div>
+      </div>
+    `;
+
+    const btn = document.createElement('button');
+    btn.className = 'card-remove';
+    btn.textContent = '✕';
+    btn.onclick = () => removeCreature(id);
+    card.querySelector('.card-header').appendChild(btn);
+
+    grid.appendChild(card);
+  }
+}
+
+// Start with a sample creature
+document.getElementById('name').value = 'Flamepaw';
+createCreature();
+</script>
 </body>
 </html>
 ```
 
-Open **`creature_cards.html`** in your browser to run the full program.
-
----
-
-## Key Concepts Walkthrough
+## How It Works
 
 ### Object Literals
 
-The simplest way to create an object is with curly braces:
+An object literal is data grouped with curly braces. The creature object stores all information about one creature in one place:
 
-```js
+```javascript
 const creature = {
-  name: 'Pyrocat',
+  name: 'Flamepaw',
   type: 'fire',
-  hp: 95,
+  hp: 60,
+  stats: { attack: 50, defense: 40 },
+  id: 1234567890,
+  describe() { return `${this.name} is a ${this.type}-type with ${this.hp} HP.`; }
 };
 ```
 
-Each `key: value` pair is a **property**. Access them with dot notation (`creature.name`) or bracket notation (`creature['name']`).
+Each key (name, type, hp) maps to a value. You read values with dot notation: `creature.name`. Methods are functions inside objects—they get access to other properties via `this`.
 
-### Nested Objects
+### Properties and Methods
 
-Objects can contain other objects:
+Properties store data. Methods are functions. In `createCreature()`, we build an object with both:
 
-```js
-const TYPE_DATA = {
-  fire:  { emoji: '🔥', cssClass: 'type-fire', hpColor: '#fca5a5' },
-  water: { emoji: '💧', cssClass: 'type-water', hpColor: '#93c5fd' },
-};
-```
-
-Access nested values by chaining: `TYPE_DATA.fire.emoji` → `'🔥'`
-
-### Methods
-
-A property whose value is a function is called a **method**:
-
-```js
+```javascript
 const creature = {
-  name: 'Pyrocat',
-  attack: 88,
-  defense: 55,
-  maxHp: 95,
-  powerRating() {
-    return Math.round((this.attack * 2 + this.defense + this.maxHp / 2) / 4);
-  }
+  name,
+  type,
+  hp,
+  describe() { return `${this.name} is a ${this.type}-type...`; }
 };
-
-creature.powerRating(); // 63
 ```
 
-`this` inside a method refers to the object itself.
+The `describe()` method uses `this.name` and `this.type` to access the creature's own data. When you call `creature.describe()`, `this` refers to that creature.
+
+### Nested Objects (Objects Inside Objects)
+
+The `stats` property is itself an object:
+
+```javascript
+stats: { attack: 50, defense: 40 }
+```
+
+To access it, use two dots: `creature.stats.attack` returns 50. Nesting keeps related data together—all combat stats live in one place.
 
 ### Destructuring
 
-Instead of writing `TYPE_DATA[type].emoji` over and over, pull values out in one line:
+Instead of writing `creature.name` and `creature.type` repeatedly, destructuring pulls properties out:
 
-```js
-const { emoji, cssClass, hpColor } = TYPE_DATA[type];
-// Now use emoji, cssClass, hpColor directly
+```javascript
+const { name, type, hp, stats, id } = creature;
 ```
 
-Works with nested objects and function parameters too:
+This is shorthand for `const name = creature.name;` etc. You can also destructure nested objects in one line:
 
-```js
-function createCreature({ name, type, hp, attack, defense }) {
-  // name, type, hp, etc. are already local variables
-}
+```javascript
+const { attack, defense } = stats;
 ```
 
-### Computed Property Names
+### TYPE_DATA: A Lookup Object
 
-Use a variable as a property key by wrapping it in `[]`:
+`TYPE_DATA` is an object used as a lookup table. Instead of writing if-else chains, use the type as a key:
 
-```js
-const key = 'fire';
-const data = { [key]: '🔥' };  // same as { fire: '🔥' }
+```javascript
+const TYPE_DATA = {
+  fire:     { color: '#c0392b', bg: '#e74c3c', emoji: '🔥' },
+  water:    { color: '#2471a3', bg: '#3498db', emoji: '💧' },
+};
+
+const { color, bg, emoji } = TYPE_DATA[type];
 ```
 
-Useful when building objects dynamically.
+When `type` is `'fire'`, `TYPE_DATA[type]` returns the fire object with its color, background, and emoji. This pattern is cleaner than switching through many if statements.
 
-### Spread Operator
+### Object.keys(), Object.values(), Object.entries()
 
-Copy an object and add or override properties:
+These methods extract data from objects. `Object.keys(TYPE_DATA)` returns `['fire', 'water', 'grass', 'electric', 'dark', 'psychic']`. `Object.values(TYPE_DATA)` returns an array of all the type objects. `Object.entries(TYPE_DATA)` returns key-value pairs as arrays. Use these when you need to loop through or count properties.
 
-```js
-const base = { hp: 80, attack: 65 };
-const stronger = { ...base, attack: 90 };  // { hp: 80, attack: 90 }
+### The Spread Operator with Objects
+
+The spread operator `...` copies object properties. For example:
+
+```javascript
+const newCreature = { ...creature, name: 'NewName' };
 ```
 
-In the program we use it for immutable array updates:
+This creates a new object with all of `creature`'s properties, but overwrites the name. Useful for avoiding accidental changes to the original.
 
-```js
-creatures = [...creatures, newCreature];
-```
+### Array of Objects
 
-### Object.keys / values / entries
-
-Iterate over an object's contents:
-
-```js
-const stats = { hp: 80, attack: 65, defense: 50 };
-
-Object.keys(stats);    // ['hp', 'attack', 'defense']
-Object.values(stats);  // [80, 65, 50]
-Object.entries(stats); // [['hp', 80], ['attack', 65], ['defense', 50]]
-
-for (const [key, val] of Object.entries(stats)) {
-  console.log(`${key}: ${val}`);
-}
-```
-
----
+`creatures` is an array holding multiple creature objects. The app manages this list with `push()`, `splice()`, and `findIndex()`. When rendering, a `for...of` loop walks through each creature and builds a card for it.
 
 ## Try It
 
-1. **Add a new type**: Add `poison` to `TYPE_DATA` with a purple gradient and the 🌿 emoji. Add it to the `<select>` dropdown.
+1. **Add a Speed Stat**: In `createCreature()`, add a speed input field in the HTML and create a `speed` property. Update the stats display to show speed alongside attack and defense.
 
-2. **Add a Speed stat**: Add a `speed` input to the form, store it in the creature object, and display it on the card.
+2. **Create a Type Weakness System**: Add a `weakness` property to each type in `TYPE_DATA` (e.g., fire is weak to water). Display the weakness on the card by looking it up from `TYPE_DATA`.
 
-3. **Sort by power**: After `creatures = [...creatures, creature]`, sort the array by `powerRating()` before calling `renderAll()`.
+3. **Add a Power Move**: Add a `moves` array property to each creature (e.g., `moves: ['Flame Burst', 'Scratch']`). Display the first move below the stats.
 
-4. **Edit a card**: Double-click a card's name to make it editable (use `contenteditable="true"`), then update the object when the user blurs out.
-
----
+4. **Color the Stats**: Use the creature's type color to highlight stat values. Wrap each stat value in a `<span>` with a background color pulled from `TYPE_DATA[type].bg`.
 
 ## Exercises
 
-### Exercise 1 — Battle Score
+**Exercise 1 (Warm-up): Add a Level Property**
 
-Add a `battleScore()` method to the creature object that returns:
+Modify `createCreature()` to add a `level` property (default to 1). Add a level input field to the form and display the level on the card. Use `Math.min()` and `Math.max()` to keep it between 1 and 100.
 
-```
-(attack × 1.5) + (defense × 1.2) + (hp × 0.5)
-```
+**Exercise 2 (Medium): Create an Expanded Stats Object**
 
-Display it on the card as a small badge in the corner. Round to the nearest integer.
+Instead of storing `stats` as `{ attack, defense }`, create a fuller stats object with spAtk, spDef, and speed. Update the card display to show all five stats. Use destructuring to pull all stats cleanly.
 
-### Exercise 2 — Type Matchups
+**Exercise 3 (Challenge): Add an Evolution System**
 
-Create a `TYPE_MATCHUPS` object where each type lists its strengths and weaknesses:
-
-```js
-const TYPE_MATCHUPS = {
-  fire:  { strong: ['grass', 'ice'], weak: ['water', 'rock'] },
-  water: { strong: ['fire', 'rock'], weak: ['grass', 'electric'] },
-  // ...
-};
-```
-
-When two cards are displayed, add a small "⚔️ vs" comparison button that pops up an alert saying which creature has the type advantage.
-
-### Exercise 3 — Import / Export
-
-Add a **"Export JSON"** button that calls `JSON.stringify(creatures, null, 2)` and shows the result in a `<textarea>`. Add an **"Import JSON"** button that reads from that textarea and uses `JSON.parse()` to restore creatures. This simulates a simple save/load system.
-
----
+Add an `evolvedForm` property to the creature object. Create a second lookup object `EVOLUTIONS` mapping creature names to evolved names and new stat multipliers. Add an "Evolve" button to each card. Clicking it should create a new creature from the evolved form (higher stats, new name) and remove the original.
 
 ## Solutions
 
-### Solution 1 — Battle Score
+**Exercise 1 Solution:**
 
-```js
-function createCreature({ name, type, hp, attack, defense }) {
-  const { emoji, cssClass, hpColor } = TYPE_DATA[type];
-  return {
-    id: nextId++,
-    name, type, hp, maxHp: hp, attack, defense,
-    emoji, cssClass, hpColor,
-    powerRating() {
-      return Math.round((this.attack * 2 + this.defense + this.maxHp / 2) / 4);
-    },
-    battleScore() {
-      return Math.round(this.attack * 1.5 + this.defense * 1.2 + this.maxHp * 0.5);
-    }
-  };
-}
+Add the level input to the HTML form:
+```html
+<label for="level">Level</label>
+<input type="number" id="level" value="1" min="1" max="100">
 ```
 
-In `renderCard`, add to the card HTML:
+Modify `createCreature()`:
+```javascript
+const level = Math.min(100, Math.max(1, +document.getElementById('level').value));
 
-```js
-`<div class="battle-badge">⚔️ ${creature.battleScore()}</div>`
-```
-
-### Solution 2 — Type Matchups
-
-```js
-const TYPE_MATCHUPS = {
-  fire:     { strong: ['grass', 'ice'],      weak: ['water', 'rock']     },
-  water:    { strong: ['fire', 'rock'],       weak: ['grass', 'electric'] },
-  grass:    { strong: ['water', 'rock'],      weak: ['fire', 'ice']       },
-  electric: { strong: ['water'],              weak: ['grass', 'ground']   },
-  psychic:  { strong: ['fighting', 'ghost'],  weak: ['dark', 'ghost']     },
-  ice:      { strong: ['grass', 'dragon'],    weak: ['fire', 'steel']     },
-  dragon:   { strong: ['dragon'],             weak: ['ice', 'fairy']      },
-  dark:     { strong: ['psychic', 'ghost'],   weak: ['fighting', 'fairy'] },
+const creature = {
+  name,
+  type,
+  hp,
+  level,
+  stats: { attack, defense },
+  id: Date.now(),
+  describe() {
+    return `${this.name} (Lvl ${this.level}) is a ${this.type}-type with ${this.hp} HP.`;
+  },
 };
+```
 
-function compareCreatures(a, b) {
-  const aMatchup = TYPE_MATCHUPS[a.type];
-  const bMatchup = TYPE_MATCHUPS[b.type];
+Update the card header in `renderCards()`:
+```javascript
+card.innerHTML = `
+  <div class="card-header">
+    <h2>${name} <small style="font-size: 0.8rem; opacity: 0.8;">Lvl ${level}</small></h2>
+    <span class="card-hp">HP ${hp}</span>
+  </div>
+  ...
+`;
+```
 
-  if (aMatchup?.strong.includes(b.type)) {
-    return `${a.name} (${a.type}) has the advantage over ${b.name} (${b.type})!`;
-  } else if (bMatchup?.strong.includes(a.type)) {
-    return `${b.name} (${b.type}) has the advantage over ${a.name} (${a.type})!`;
-  } else {
-    return `${a.name} vs ${b.name} — it's a fair fight!`;
-  }
+**Exercise 2 Solution:**
+
+Modify `createCreature()` to expand the stats object:
+```javascript
+const hp = Math.min(200, Math.max(10, +document.getElementById('hp').value));
+const attack = Math.min(150, Math.max(5, +document.getElementById('attack').value));
+const defense = Math.min(150, Math.max(5, +document.getElementById('defense').value));
+
+const creature = {
+  name,
+  type,
+  hp,
+  stats: {
+    hp,
+    attack,
+    defense,
+    spAtk: Math.floor(attack * 0.8),
+    spDef: Math.floor(defense * 0.8),
+    speed: Math.floor(Math.random() * 80 + 20),
+  },
+  id: Date.now(),
+  describe() {
+    return `${this.name} is a ${this.type}-type with ${this.hp} HP.`;
+  },
+};
+```
+
+Update `renderCards()` to destructure all stats and display them:
+```javascript
+for (const creature of creatures) {
+  const { name, type, hp, stats, id } = creature;
+  const { color, bg, emoji } = TYPE_DATA[type];
+  const { attack, defense, spAtk, spDef, speed } = stats;
+
+  // ... build card ...
+
+  card.innerHTML = `
+    <div class="card-header">
+      <h2>${name}</h2>
+      <span class="card-hp">HP ${hp}</span>
+    </div>
+    <div class="card-art">${emoji}</div>
+    <div class="card-type">${type} type</div>
+    <div class="card-stats">
+      <div><div class="label">Attack</div><div class="value">${attack}</div></div>
+      <div><div class="label">Sp. Atk</div><div class="value">${spAtk}</div></div>
+      <div><div class="label">Defense</div><div class="value">${defense}</div></div>
+      <div><div class="label">Sp. Def</div><div class="value">${spDef}</div></div>
+      <div><div class="label">Speed</div><div class="value">${speed}</div></div>
+    </div>
+  `;
+  // ... rest of card ...
 }
 ```
 
-### Solution 3 — Import / Export
+**Exercise 3 Solution:**
 
-```js
-document.getElementById('exportBtn').addEventListener('click', () => {
-  const json = JSON.stringify(creatures, null, 2);
-  document.getElementById('jsonArea').value = json;
-});
-
-document.getElementById('importBtn').addEventListener('click', () => {
-  try {
-    const imported = JSON.parse(document.getElementById('jsonArea').value);
-    // Restore methods (they're stripped by JSON.stringify)
-    creatures = imported.map(c => createCreature(c));
-    renderAll();
-  } catch (e) {
-    alert('Invalid JSON!');
-  }
-});
+Add the EVOLUTIONS lookup at the top of the script:
+```javascript
+const EVOLUTIONS = {
+  'Flamepaw': { name: 'Inferno', statMultiplier: 1.3 },
+  'Bubbles': { name: 'Tsunami', statMultiplier: 1.25 },
+  'Thornling': { name: 'Jungle King', statMultiplier: 1.35 },
+};
 ```
 
-Note: `JSON.stringify` strips methods — only data survives. That's why we re-run `createCreature` on import to restore the methods.
+Add an evolve function:
+```javascript
+function evolveCreature(id) {
+  const creature = creatures.find(c => c.id === id);
+  if (!creature) return;
 
----
+  const evolution = EVOLUTIONS[creature.name];
+  if (!evolution) return alert(`${creature.name} cannot evolve!`);
+
+  const evolved = {
+    name: evolution.name,
+    type: creature.type,
+    hp: Math.floor(creature.hp * evolution.statMultiplier),
+    stats: {
+      attack: Math.floor(creature.stats.attack * evolution.statMultiplier),
+      defense: Math.floor(creature.stats.defense * evolution.statMultiplier),
+    },
+    id: Date.now(),
+    describe() {
+      return `${this.name} (evolved) is a ${this.type}-type with ${this.hp} HP.`;
+    },
+  };
+
+  removeCreature(id);
+  creatures.push(evolved);
+  renderCards();
+}
+```
+
+Update `renderCards()` to add an evolve button if applicable:
+```javascript
+const canEvolve = Object.keys(EVOLUTIONS).includes(name);
+
+const btn = document.createElement('button');
+btn.className = 'card-remove';
+btn.textContent = canEvolve ? '✨' : '✕';
+btn.onclick = canEvolve ? () => evolveCreature(id) : () => removeCreature(id);
+card.querySelector('.card-header').appendChild(btn);
+```
 
 ## What You Learned
 
-| Concept | Where it appeared |
-|---------|-------------------|
-| Object literals `{}` | `createCreature()`, `TYPE_DATA` |
-| Properties & dot notation | `creature.name`, `TYPE_DATA.fire.emoji` |
-| Nested objects | `TYPE_DATA` with nested `{ emoji, cssClass, hpColor }` |
-| Methods & `this` | `powerRating()` on creature |
-| Destructuring | `const { emoji, cssClass } = TYPE_DATA[type]` |
-| Parameter destructuring | `function createCreature({ name, type, hp })` |
-| Computed property names | `{ [key]: value }` |
-| Spread operator | `[...creatures, newCreature]` |
-| `Object.keys/values/entries` | Iterating stats in console log |
-| Optional chaining `?.` | `TYPE_MATCHUPS[type]?.strong` |
-
----
+| Concept | What It Does |
+|---------|--------------|
+| **Object Literal** | Groups related data with `{ key: value }` syntax. |
+| **Properties** | Named values stored in an object, accessed with dot notation (obj.prop). |
+| **Methods** | Functions inside objects that can use `this` to access other properties. |
+| **this Keyword** | Refers to the object itself when used inside a method. |
+| **Nested Objects** | Objects inside objects, accessed with chained dots (obj.nested.prop). |
+| **Destructuring** | Extracts properties from objects into variables with `const { x, y } = obj`. |
+| **Lookup Tables** | Objects used as dictionaries to find values by key instead of if-else chains. |
+| **Object.keys()** | Returns an array of all the keys in an object. |
+| **Object.values()** | Returns an array of all the values in an object. |
+| **Object.entries()** | Returns key-value pairs as an array of arrays. |
 
 ## Building with Claude
 
-- *"Add a move list to each creature — an array of objects with `name` and `power` fields — and show the top move on the card."*
-- *"Make the cards flip on hover to show stats on the front and a full description on the back using CSS 3D transforms."*
-- *"Add a 'favorites' feature using a `favorite` boolean property — starred creatures float to the top of the grid."*
+- "Add a battle system where two creatures fight based on their stats. The winner is whoever's attack + speed exceeds the other's defense + HP."
+
+- "Create an inventory system where each creature has a list of held items. Items can boost stats. Let me choose items when creating a creature."
+
+- "Add a trading feature where I can export a creature as JSON and import another creature's JSON to swap them."
+
+- "Build a pokedex-style search and filter system. Let me filter creatures by type, level, or search by name. Show stats sorted by highest attack, fastest speed, etc."
