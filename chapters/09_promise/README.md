@@ -1,12 +1,194 @@
 # Chapter 9 — Build Your Own Promise
 
-`async/await` is the most important addition to modern JavaScript. But it's syntax sugar over Promises, and Promises are the most misunderstood part of the language. Developers use them daily without knowing why `.then()` returns a new Promise, what `queueMicrotask` does, or why an unhandled rejection silently swallows errors. In this chapter you build a Promise implementation from scratch — state machine, microtask queue, chaining, `.all()`, `.race()`, and `.finally()`. After this chapter, `async/await` will never be mysterious again.
+`async/await` is the most important addition to modern JavaScript — but understanding it requires understanding what it sits on top of. Promises are the contract that makes async code composable: they let you pass a future value around like a present one, chain transformations without nesting callbacks, and handle errors at any point in the chain. Yet most developers use them daily without knowing why `.then()` returns a new Promise, what `queueMicrotask` does, or why an unhandled rejection silently swallows errors. In this chapter you build a Promise implementation from scratch — state machine, microtask queue, chaining, `.all()`, `.race()`, and `.finally()`. After this, `async/await` will never be mysterious again.
+
+---
+
+## Promise State Machine
+
+```
+Promise State Machine
+─────────────────────────────────────────────────────────
+                    ┌──────────┐
+                    │ PENDING  │  ← initial state
+                    └──────────┘
+                    /          \
+         resolve(v)              reject(e)
+                /                  \
+       ┌────────────┐        ┌──────────────┐
+       │ FULFILLED  │        │   REJECTED   │
+       │  value: v  │        │  reason: e   │
+       └────────────┘        └──────────────┘
+              │                      │
+        .then(fn) ──────────▶ new Promise
+        .catch(fn) ─────────▶ new Promise
+        .finally(fn) ───────▶ new Promise
+              │
+         (transitions are ONE-WAY and FINAL)
+```
+
+A Promise starts in `PENDING` and moves to exactly one settled state. Every `.then()`, `.catch()`, and `.finally()` call produces a brand-new Promise — never modifying the one it was called on.
 
 ---
 
 ## The Problem
 
 Your app needs to fetch a user, then fetch their posts, then display both. These are sequential async operations — each depends on the last. With callbacks, this creates deeply nested "callback hell." Promises solve this by representing a future value as an object you can chain. Build the Promise implementation yourself and you'll understand every `.then()` you ever write.
+
+---
+
+## Building It Step by Step
+
+### v1 — State and Settlement Only
+
+The simplest useful Promise: it stores state and value. No `.then()` yet. Even this is already useful — you can pass the Promise object around, store it, and check whether it resolved later.
+
+```javascript
+const PENDING   = 'pending';
+const FULFILLED = 'fulfilled';
+const REJECTED  = 'rejected';
+
+class MyPromise {
+  constructor(executor) {
+    this.state = PENDING;
+    this.value = undefined;
+
+    const resolve = (value) => {
+      if (this.state !== PENDING) return;  // one-way transition
+      this.state = FULFILLED;
+      this.value = value;
+    };
+
+    const reject = (reason) => {
+      if (this.state !== PENDING) return;
+      this.state = REJECTED;
+      this.value = reason;
+    };
+
+    try {
+      executor(resolve, reject);
+    } catch (err) {
+      reject(err);
+    }
+  }
+}
+
+// Already useful: pass it around, hand it to another function
+const p = new MyPromise(resolve => setTimeout(() => resolve(42), 1000));
+console.log(p.state);  // 'pending'
+// 1 second later: p.state === 'fulfilled', p.value === 42
+```
+
+The guard `if (this.state !== PENDING) return` enforces one-way transitions. Call `resolve` twice — the second call is silently ignored.
+
+### v2 — Add `.then()` and Value Threading
+
+Now we add the chaining primitive. The key insight: `.then()` must return a **new Promise**, not `this`. If it returned `this`, two `.then()` calls on the same promise would share the same resolved value — there'd be no way to transform the value between steps.
+
+```javascript
+class MyPromise {
+  constructor(executor) {
+    this.state    = PENDING;
+    this.value    = undefined;
+    this.handlers = [];  // ← callbacks registered before settlement
+
+    const resolve = (value) => {
+      if (this.state !== PENDING) return;
+      this.state = FULFILLED;
+      this.value = value;
+      this._runHandlers();  // ← flush any registered handlers
+    };
+
+    const reject = (reason) => {
+      if (this.state !== PENDING) return;
+      this.state = REJECTED;
+      this.value = reason;
+      this._runHandlers();
+    };
+
+    try { executor(resolve, reject); }
+    catch (err) { reject(err); }
+  }
+
+  then(onFulfilled, onRejected) {
+    return new MyPromise((resolve, reject) => {        // ← NEW promise each time
+      this.handlers.push({
+        onFulfilled: typeof onFulfilled === 'function' ? onFulfilled : null,
+        onRejected:  typeof onRejected  === 'function' ? onRejected  : null,
+        resolve,   // ← these belong to the NEW promise
+        reject,
+      });
+      this._runHandlers();
+    });
+  }
+
+  _runHandlers() {
+    if (this.state === PENDING) return;
+    for (const { onFulfilled, onRejected, resolve, reject } of this.handlers) {
+      if (this.state === FULFILLED) {
+        if (!onFulfilled) { resolve(this.value); return; }
+        try   { resolve(onFulfilled(this.value)); }
+        catch (err) { reject(err); }
+      } else {
+        if (!onRejected)  { reject(this.value); return; }
+        try   { resolve(onRejected(this.value)); }
+        catch (err) { reject(err); }
+      }
+    }
+    this.handlers = [];
+  }
+}
+
+// Value threading now works:
+MyPromise.resolve(1)
+  .then(n => n + 1)   // 2 → value of next promise
+  .then(n => n * 10)  // 20 → value of next promise
+  .then(n => console.log(n)); // logs 20
+```
+
+Why push handlers into an array instead of running immediately? Because the Promise might already be settled when `.then()` is called — or it might settle *later*. The array handles both cases: if settled, `_runHandlers` fires right away; if pending, the handlers wait.
+
+### v3 — Microtask Scheduling, `.catch`, `.finally`, and Statics
+
+The final version adds three things:
+
+1. `queueMicrotask` in `_runHandlers` — handlers must never fire synchronously, even if the Promise is already settled
+2. `.catch()` and `.finally()` — convenience wrappers over `.then()`
+3. Static methods: `resolve`, `reject`, `all`, `race`, `allSettled`
+
+```javascript
+_runHandlers() {
+  if (this.state === PENDING) return;
+
+  for (const handler of this.handlers) {
+    queueMicrotask(() => {           // ← schedule, don't call immediately
+      const { onFulfilled, onRejected, resolve, reject } = handler;
+      if (this.state === FULFILLED) {
+        if (!onFulfilled) { resolve(this.value); return; }
+        try   { resolve(onFulfilled(this.value)); }
+        catch (err) { reject(err); }
+      } else {
+        if (!onRejected) { reject(this.value); return; }
+        try   { resolve(onRejected(this.value)); }
+        catch (err) { reject(err); }
+      }
+    });
+  }
+
+  this.handlers = [];
+}
+
+catch(onRejected)  { return this.then(null, onRejected); }
+
+finally(fn) {
+  return this.then(
+    (value)  => MyPromise.resolve(fn()).then(() => value),
+    (reason) => MyPromise.resolve(fn()).then(() => { throw reason; })
+  );
+}
+```
+
+The `finally` design is subtle: it always calls `fn()`, then passes through the original value *or* re-throws the original reason. If `fn()` itself returns a rejected promise, that new rejection wins — which is the correct behaviour.
 
 ---
 
@@ -251,6 +433,28 @@ Without this thenable check, returning a Promise from `.then()` would give you a
 
 Handlers are never called synchronously, even if the Promise is already settled. They're scheduled as **microtasks** using `queueMicrotask()`:
 
+```
+Execution Order
+─────────────────────────────────────────────────────────
+Script runs synchronously:
+  console.log('A')                     → A
+  Promise.resolve('x').then(v => ...)  → queued as microtask
+  console.log('B')                     → B
+  setTimeout(() => ..., 0)             → queued as macrotask
+
+Current sync code finishes
+  └─▶ Microtask queue drains:
+        .then callback fires           → C (microtask)
+
+Event loop tick
+  └─▶ Macrotask queue:
+        setTimeout callback            → D (macrotask)
+
+Output order: A B C D
+```
+
+Microtasks run **after the current synchronous code finishes**, but **before any setTimeout or UI event**. This gives you consistent, predictable ordering:
+
 ```javascript
 _runHandlers() {
   if (this.state === PENDING) return;
@@ -271,8 +475,6 @@ _runHandlers() {
   this.handlers = [];
 }
 ```
-
-Microtasks run **after the current synchronous code finishes**, but **before any setTimeout or UI event**. This gives you consistent, predictable ordering:
 
 ```javascript
 console.log('1 — sync');
@@ -324,15 +526,71 @@ static race(promises) {
 
 ---
 
-## Try It
+## Guided Try It — `retry`
 
-1. **Add a timeout utility**: Write `withTimeout(promise, ms)` that races `promise` against a timer that rejects after `ms` milliseconds. Use `MyPromise.race()` and a `delay()` function. Test it with a slow `fetchUser` call.
+**The problem**: Write `retry(fn, 3)` that calls `fn()` (which returns a Promise) up to 3 times, with 200ms between tries. It should resolve with the first successful result, or reject with the last error if all attempts fail.
 
-2. **Add `MyPromise.any()`**: Like `.race()`, but ignores rejections — resolves when the first promise *fulfills*, rejects only if all promises reject. The rejection reason should be an `AggregateError` containing all individual reasons.
+**Hint**: Think about what happens after a rejection — you want to try again, not propagate the error. `.catch()` lets you intercept a rejection and return something new instead. What should you return from inside `.catch()` to trigger another attempt?
 
-3. **Track handler call order**: Add a `debug` mode to `MyPromise` that logs every state transition and handler invocation with timestamps. Use this to visualise the microtask order when three chained `.then()` calls each return a new Promise.
+**Step 1 — Handle the base case.**
 
-4. **Make `finally` truly final**: Currently `.finally(fn)` passes through the value. Modify it so if `fn` itself returns a rejected promise, that rejection takes precedence over the original value or reason.
+`fn()` returns a Promise. When it rejects, `.catch()` fires. Inside `.catch`, you want to try again — but only if there are attempts remaining. Start with the terminating case:
+
+```javascript
+function retry(fn, attempts) {
+  return fn().catch(err => {
+    if (attempts <= 1) throw err;  // out of attempts — propagate
+    // otherwise: try again (coming in Step 2)
+  });
+}
+```
+
+**Step 2 — Add the recursive retry with a delay.**
+
+On rejection with remaining attempts, you want to wait 200ms then call `attempt(remaining - 1)`. But `setTimeout` doesn't return a Promise — you need to wrap it:
+
+```javascript
+function retry(fn, attempts) {
+  return fn().catch(err => {
+    if (attempts <= 1) throw err;
+    return new MyPromise((resolve, reject) => {
+      setTimeout(() => {
+        retry(fn, attempts - 1).then(resolve, reject);
+      }, 200);
+    });
+  });
+}
+```
+
+The `new MyPromise` wrapper gives the `setTimeout` callback a channel to resolve or reject the outer chain.
+
+**Step 3 — Verify it threads correctly.**
+
+The outer `.catch` returns a new Promise. That Promise resolves when the inner `retry` resolves, or rejects when all retries are exhausted. The caller sees a single Promise that either eventually resolves or rejects after all attempts — no inner plumbing visible.
+
+**Full solution**:
+
+```javascript
+function retry(fn, attempts, delay = 200) {
+  return new MyPromise((resolve, reject) => {
+    function attempt(remaining) {
+      fn().then(resolve).catch(err => {
+        if (remaining <= 1) {
+          reject(err);
+        } else {
+          setTimeout(() => attempt(remaining - 1), delay);
+        }
+      });
+    }
+    attempt(attempts);
+  });
+}
+
+// Usage:
+retry(() => fetchUser(1), 3).then(user => console.log(user));
+```
+
+**Think about it**: Why can't you use `.then().then()` chaining instead of recursion here? What would a non-recursive version look like, and where does it break down when the number of retries isn't known at write time?
 
 ---
 

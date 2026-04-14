@@ -4,9 +4,147 @@ Redux is one of the most influential JavaScript libraries ever written — not b
 
 ---
 
+```
+Redux Data Flow
+─────────────────────────────────────────────────────────
+        User clicks "Add to Cart"
+                │
+                ▼
+        dispatch({ type: 'ADD_ITEM', payload: product })
+                │
+                ▼
+        ┌─────────────────────────────┐
+        │  Middleware chain           │
+        │  logger → thunk → ...       │
+        └─────────────────────────────┘
+                │
+                ▼
+        reducer(currentState, action)
+        └── cartReducer(state.cart, action)
+        └── uiReducer(state.ui, action)
+                │
+                ▼
+        newState = { cart: [...], ui: {...} }
+                │
+                ▼
+        store.state = newState  (immutable replace, not mutation)
+                │
+                ▼
+        listeners.forEach(fn => fn())  (notify all subscribers)
+                │
+           ┌────┴────┐
+           ▼         ▼
+     renderCart()  updateBadge()  (re-render only affected UI)
+```
+
+---
+
 ## The Problem
 
 You have a shopping cart. The cart total affects the header badge, the cart icon, the checkout button, and a summary panel. Whenever an item is added or removed, all four need to update. With scattered `let cart = []` variables, keeping them in sync is a nightmare. Redux's insight: put all state in one object, enforce that it only changes through explicit actions, and notify every subscriber after every change. One source of truth, infinite observers.
+
+---
+
+## Building It Step by Step
+
+### v1 — Minimal Store (15 lines)
+
+Start with just the essentials: a store that holds state, lets you read it with `getState()`, and changes it only via `dispatch()`. No listeners, no middleware.
+
+```javascript
+function createStore(reducer, initialState) {
+  let state = initialState;
+
+  function getState() {
+    return state;
+  }
+
+  function dispatch(action) {
+    state = reducer(state, action);
+    return action;
+  }
+
+  dispatch({ type: '@@INIT' });
+  return { getState, dispatch };
+}
+
+// Usage:
+const store = createStore(cartReducer);
+store.dispatch({ type: 'ADD_ITEM', payload: { id: 1, name: 'Book', price: 24.99 } });
+console.log(store.getState()); // [{ id: 1, name: 'Book', qty: 1, price: 24.99 }]
+```
+
+This is already valuable. State only changes through `dispatch`. The `@@INIT` dispatch seeds the initial state from the reducer's default parameter. But there's no way for the UI to know when something changed — you'd have to re-read `getState()` manually.
+
+### v2 — Add `subscribe()` — the Pub/Sub Pattern
+
+The store needs to notify the UI after every change. Add a listener list and a `subscribe` function that returns an `unsubscribe` cleanup function:
+
+```javascript
+function createStore(reducer, initialState) {
+  let state     = initialState;
+  let listeners = [];
+
+  function getState() { return state; }
+
+  function subscribe(listener) {
+    listeners.push(listener);
+    let active = true;
+    return function unsubscribe() {   // ← caller gets a cleanup function
+      if (!active) return;
+      active = false;
+      listeners.splice(listeners.indexOf(listener), 1);
+    };
+  }
+
+  function dispatch(action) {
+    state = reducer(state, action);
+    for (const fn of [...listeners]) fn();  // ← copy list before iterating
+    return action;
+  }
+
+  dispatch({ type: '@@INIT' });
+  return { getState, subscribe, dispatch };
+}
+
+// Usage — UI wires up once, updates automatically:
+const unsubscribe = store.subscribe(() => renderCart(store.getState()));
+store.dispatch({ type: 'ADD_ITEM', payload: product }); // renderCart called automatically
+unsubscribe(); // clean up when done
+```
+
+The `return unsubscribe` pattern is standard JavaScript cleanup idiom. A function that registers something returns the function that un-registers it. You'll see this in `addEventListener`/`removeEventListener`, React's `useEffect` cleanup, and RxJS subscriptions.
+
+Why copy the listener list with `[...listeners]` before iterating? If a listener calls `unsubscribe` during iteration, it would splice the array mid-loop — skipping the next listener. The copy makes iteration safe.
+
+### v3 — Add `combineReducers` and `applyMiddleware`
+
+Large apps need multiple state slices and cross-cutting concerns (logging, async). Add both:
+
+```javascript
+// combineReducers: splits root reducer into slices
+const rootReducer = combineReducers({
+  cart: cartReducer,
+  ui:   uiReducer,
+});
+
+// applyMiddleware: wraps dispatch with a composed chain
+const store = createStore(
+  rootReducer,
+  undefined,
+  applyMiddleware(loggerMiddleware)
+);
+```
+
+`applyMiddleware` uses a clever trick: the `enhancer` parameter in `createStore(reducer, initialState, enhancer)`. If an enhancer is provided, `createStore` immediately delegates to it:
+
+```javascript
+if (typeof enhancer !== 'undefined') {
+  return enhancer(createStore)(reducer, initialState);
+}
+```
+
+This means `applyMiddleware` returns a function that *wraps* `createStore` — giving it complete control over store creation while still using the original `createStore` for the base store. The pattern is called a store enhancer.
 
 ---
 
@@ -330,11 +468,103 @@ The key line is `next(action)`: it passes the action down the chain. The middlew
 
 `applyMiddleware` composes the chain using `reduceRight`, so middlewares wrap each other like onion layers. The innermost layer is the real `store.dispatch`.
 
+```
+applyMiddleware(logger, thunk)
+─────────────────────────────────────────────────────────
+store.dispatch(action)
+       │
+       ▼
+  logger middleware
+  ├─ console.log('dispatching', action)
+  ├─ next(action)  ──────────────────▶  thunk middleware
+  │                                    ├─ if fn: action(dispatch, getState)
+  │                                    └─ else: next(action) ──▶ real dispatch
+  │                                                                 │
+  └─ console.log('next state', store.getState())  ◀────────────────┘
+       │
+       ▼
+  action returned to caller
+```
+
 ---
 
 ## Try It
 
-1. **Add a `thunk` middleware**: Allows dispatching functions as actions. If the action is a function, call it with `dispatch` and `getState`. Otherwise, pass to `next`. This enables async action creators.
+### Guided: Add a `thunk` Middleware
+
+**The problem**: Right now, `store.dispatch` only accepts plain objects. But async operations — fetching a user, submitting a form — need to dispatch actions *after* an `await`. The solution: allow dispatching functions. When the store sees a function as the action, it calls the function instead of passing it to the reducer.
+
+This is how `redux-thunk` works. The whole library is 12 lines.
+
+**The hint**: The middleware just needs to check: is this action a function? If yes, call it with `(dispatch, getState)`. If no, pass it through to `next` unchanged.
+
+**Step 1** — Write the middleware signature. Every Redux middleware follows the same triple-arrow curried form:
+
+```javascript
+const thunk = store => next => action => {
+  // your code here
+};
+```
+
+`store` gives you `getState` and `dispatch`. `next` is the next middleware down the chain (or the real `dispatch`). `action` is whatever was passed to `store.dispatch()`.
+
+**Step 2** — Check if the action is a function. If it is, call it:
+
+```javascript
+const thunk = store => next => action => {
+  if (typeof action === 'function') {
+    return action(store.dispatch, store.getState);
+  }
+  // ...
+};
+```
+
+Why `store.dispatch` and not `next`? Because if a thunk dispatches *another* action, that new action should go through the full middleware chain again — including thunk itself, in case the inner action is also a thunk.
+
+**Step 3** — Handle the plain-object case. Pass it through unchanged:
+
+```javascript
+const thunk = store => next => action => {
+  if (typeof action === 'function') {
+    return action(store.dispatch, store.getState);
+  }
+  return next(action);
+};
+```
+
+**Step 4** — Register it. But think about ordering:
+
+```javascript
+const store = createStore(
+  rootReducer,
+  undefined,
+  applyMiddleware(logger, thunk)
+);
+```
+
+Does `thunk` need to come before or after `logger`? In `applyMiddleware(logger, thunk)`, `logger` wraps around `thunk`. This means logger sees the raw action first — including function actions. If you put `thunk` first (`applyMiddleware(thunk, logger)`), thunk intercepts function actions before logger sees them, so logger only logs plain-object actions. Which behavior do you want? Usually `logger` first, so you see every dispatch attempt in the log.
+
+**Now write an async action creator** that uses your new thunk:
+
+```javascript
+function fetchUser(id) {
+  return async (dispatch, getState) => {
+    dispatch({ type: 'SET_LOADING', loading: true });
+    const user = await fetch(`/api/users/${id}`).then(r => r.json());
+    dispatch({ type: 'SET_USER', user });
+    dispatch({ type: 'SET_LOADING', loading: false });
+  };
+}
+
+// Use it:
+store.dispatch(fetchUser(42)); // dispatches a function — thunk intercepts it
+```
+
+**Think about it**: If a thunk dispatches another thunk — `dispatch(anotherThunk())` — does it work? Why? (Hint: look at Step 2. What is `store.dispatch` in that line?)
+
+---
+
+The other exercises, for independent exploration:
 
 2. **Add undo/redo**: Wrap the root reducer in an `undoable(reducer)` higher-order function that stores past states in an array. Dispatch `{ type: 'UNDO' }` to roll back one step and `{ type: 'REDO' }` to go forward.
 

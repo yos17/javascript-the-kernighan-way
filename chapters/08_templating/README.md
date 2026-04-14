@@ -6,7 +6,164 @@ Handlebars. Mustache. Pug. EJS. Every major framework ships a templating engine.
 
 ## The Problem
 
-You need to produce HTML from data — a profile card, an invoice, an email. You could build strings by hand with template literals, but that gets unreadable fast when you add conditionals and loops. A templating engine solves this: write your HTML with `{{ }}` placeholders, and the engine figures out what to substitute. Build the engine yourself and the magic becomes mechanics.
+You need to produce HTML from data — a profile card, an invoice, an email.
+
+You could build strings by hand with template literals. But that approach breaks down the moment you add conditionals: now you're writing `if` statements inside string concatenations, tracking open tags across branches, and debugging output that has invisible whitespace errors. Add a loop and it gets worse. Add user input and you have an XSS vulnerability.
+
+A templating engine solves this by giving you a clean separation: the *template* describes structure, the *data* provides values, and the *engine* handles the joining safely. The markup stays readable, the escaping is automatic, and the logic is sandboxed. Build the engine yourself and the separation of concerns goes from a vague principle to a concrete design you've implemented.
+
+---
+
+## Building It Step by Step
+
+### v1 — Regex Replace (2 lines)
+
+The simplest possible template engine is a regex substitution:
+
+```javascript
+function render(template, data) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] || '');
+}
+
+// Works:
+render('Hello, {{ name }}!', { name: 'Alice' }); // → "Hello, Alice!"
+render('{{ a }} + {{ b }}', { a: 1, b: 2 });     // → "1 + 2"
+```
+
+This is genuinely useful for simple cases. Two lines. No dependencies.
+
+But try anything beyond basic substitution and it fails immediately:
+
+```javascript
+render('{{#if admin}}Admin{{/if}}', { admin: true });
+// → "{{#if admin}}Admin{{/if}}" — the regex doesn't know what #if means
+
+render('{{ bio }}', { bio: '<script>alert("xss")</script>' });
+// → '<script>alert("xss")</script>' — user input goes straight to output
+```
+
+The limitation: regex replace can only substitute whole tokens. It can't open an `if` block, emit a conditional section, then close the block. For that you need to understand the template's *structure* — which requires parsing.
+
+### v2 — Tokenizing: Split Into Parts
+
+Instead of treating the template as one big string to regex-replace, split it into a list of typed tokens:
+
+```javascript
+function tokenize(template) {
+  const tokens = [];
+  const re = /\{\{([\s\S]*?)\}\}/g;
+  let lastIndex = 0, match;
+
+  while ((match = re.exec(template)) !== null) {
+    // Collect literal text before this tag
+    if (match.index > lastIndex)
+      tokens.push({ type: 'text', value: template.slice(lastIndex, match.index) });
+
+    const inner = match[1].trim();
+    if (inner.startsWith('#if '))
+      tokens.push({ type: 'if', value: inner.slice(4) });
+    else if (inner === '/if')
+      tokens.push({ type: 'endif' });
+    else
+      tokens.push({ type: 'expr', value: inner });
+
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < template.length)
+    tokens.push({ type: 'text', value: template.slice(lastIndex) });
+
+  return tokens;
+}
+```
+
+Now a `generate()` step turns those tokens into a JavaScript code string:
+
+```javascript
+function generate(tokens) {
+  let code = 'let __out = "";\n';
+  for (const token of tokens) {
+    if (token.type === 'text') code += `__out += ${JSON.stringify(token.value)};\n`;
+    if (token.type === 'expr') code += `__out += __esc(${token.value});\n`;
+    if (token.type === 'if')   code += `if (${token.value}) {\n`;
+    if (token.type === 'endif') code += '}\n';
+  }
+  return code + 'return __out;';
+}
+```
+
+This is a real compiler — just tiny. The `generate()` step produces actual JavaScript source code from a description of the template's structure. Now `{{#if admin}}` works correctly: the token carries the condition, and the generator emits `if (admin) {`.
+
+HTML escaping can be added here too — the `__esc` function runs every expression through `escapeHtml()` before appending it to `__out`.
+
+### v3 — Loops, Raw Output, and `new Function()`
+
+Wire the generated code into a callable function using `new Function()`, add `{{#each}}` loop support, and add `{{{ }}}` triple braces for raw (unescaped) HTML:
+
+```javascript
+function compile(templateStr) {
+  const tokens = tokenize(templateStr);
+  const code   = generate(tokens);
+  return new Function('data', '__esc', `with(data) {\n${code}\n}`);
+}
+
+function render(templateStr, data) {
+  return compile(templateStr)(data, escapeHtml);
+}
+```
+
+`new Function('data', '__esc', body)` creates a function at runtime from a string of code. `with(data)` makes all data properties available as plain variable names — so `{{ name }}` works, not `{{ data.name }}`.
+
+For loops, `generate()` emits a real `for` loop:
+
+```javascript
+case 'each':
+  code += `for (let __i = 0; __i < (${token.list}).length; __i++) {\n`;
+  code += `  const ${token.item} = (${token.list})[__i];\n`;
+  break;
+```
+
+The `compile()` step means the tokenizing and code generation happen once per template. Every subsequent call to the compiled function skips all that work and just runs the generated code.
+
+---
+
+## The Three Phases — Visual
+
+```
+Template → Compiled Function
+─────────────────────────────────────────────────────
+"Hello, {{ name }}! {{#if verified}}✓{{/if}}"
+         │
+     tokenize()
+         │
+         ▼
+  ┌──────────────────────────────────┐
+  │ text: "Hello, "                 │
+  │ expr: "name"                    │
+  │ text: "! "                      │
+  │ if:   "verified"                │
+  │ text: "✓"                       │
+  │ endif                           │
+  └──────────────────────────────────┘
+         │
+     generate()
+         │
+         ▼
+  let __out = "";
+  __out += "Hello, ";
+  __out += __esc(name);
+  __out += "! ";
+  if (verified) {
+  __out += "✓";
+  }
+  return __out;
+         │
+   new Function()
+         │
+         ▼
+  fn(data) → "Hello, Alice! ✓"
+```
+
+Every templating engine — Handlebars, Mustache, Pug — runs through these same three phases. The differences are in syntax and features, not in architecture.
 
 ---
 
@@ -293,15 +450,83 @@ These let templates make decisions based on position without needing helper func
 
 ---
 
-## Try It
+## Guided Try It — Adding `{{#else}}`
 
-1. **Add `{{#else}}`**: After a `{{#if}}` block, allow `{{#else}}` to start an alternative section. You'll need a new token type `'else'` and generate `} else {` code for it.
+**The problem**: Add `{{#else}}` as an alternative block after `{{#if}}`. The template:
 
-2. **Add a string helper `{{upper name}}`**: When the first word in a tag is not a keyword, treat it as a helper function call. Register helpers in a `helpers` object and look them up before falling back to property access.
+```handlebars
+{{#if admin}}Admin{{#else}}User{{/if}}
+```
 
-3. **Add `{{@index}}` syntax**: Some engines use `@` for loop metadata instead of `$`. Support both by generating both variable names in the `each` code.
+should render `'Admin'` when `admin` is truthy and `'User'` when it is falsy.
 
-4. **Add partial support `{{> partialName}}`**: Let users register named sub-templates with `registerPartial(name, template)`. When the tokenizer sees `{{> name}}`, generate a call to render that partial with the current data.
+**Hint: look at how `{{#if}}` and `{{/if}}` are handled in both `tokenize()` and `generate()`** before you start adding anything new.
+
+**Step 1 — Add a new token type in `tokenize()`.**
+
+You need to recognize `{{#else}}` as its own token. In the `tokenize()` function, find the section that dispatches on the inner text. Add a new case before the generic `expr` fallthrough:
+
+```javascript
+else if (inner === '#else') {
+  tokens.push({ type: 'else' });
+}
+```
+
+What text should the tokenizer look for? The string `'#else'` — the `{{` and `}}` are already stripped by the regex, and `.trim()` removes whitespace.
+
+**Step 2 — What JavaScript does `else` generate?**
+
+An `{{#if}}` generates:
+
+```javascript
+if (condition) {
+```
+
+A `{{/if}}` generates:
+
+```javascript
+}
+```
+
+Where does `{{#else}}` fit? It needs to *close* the if-block and *open* the else-block. In JavaScript that looks like:
+
+```javascript
+} else {
+```
+
+In `generate()`, add the case:
+
+```javascript
+case 'else':
+  code += '} else {\n';
+  break;
+```
+
+**Step 3 — Does `{{/if}}` need to change?**
+
+The generated code for `{{#if}}...{{#else}}...{{/if}}` ends up as:
+
+```javascript
+if (condition) {
+  // if-block
+} else {
+  // else-block
+}   ← this closing brace comes from {{/if}}
+```
+
+The `{{/if}}` still just emits `}\n` — it closes whichever block is open, whether that is an `if`-only block or the trailing `else`-block. No change needed.
+
+**Step 4 — Put it together and test it.**
+
+With these two additions (one line in `tokenize`, one `case` in `generate`), verify:
+
+```javascript
+render('{{#if x}}YES{{#else}}NO{{/if}}', { x: true });  // → "YES"
+render('{{#if x}}YES{{#else}}NO{{/if}}', { x: false }); // → "NO"
+render('{{#if x}}YES{{/if}}', { x: true });             // → "YES" (no else — still works)
+```
+
+**Think about it**: What would happen if someone wrote `{{#else}}` without a preceding `{{#if}}`? With the current implementation, `generate()` would emit `} else {` but there would be no matching `if (condition) {` before it — the generated JavaScript would be a syntax error, and `new Function()` would throw when trying to create the function. How would you detect this at the token level and report a clearer error? (Hint: Exercise 4 in the Exercises section builds exactly this kind of validation.)
 
 ---
 

@@ -1,12 +1,142 @@
 # Chapter 10 — Build Your Own Router
 
-React Router. Vue Router. Svelte's router. Every single-page app framework ships one. But what does a router actually do? It maps URL paths to JavaScript functions — no server involved. When you click a link, instead of the browser requesting a new page, the router intercepts that click, updates the URL using `history.pushState`, and calls the matching handler to swap out the page content. In this chapter you build exactly that — a 60-line router that handles named params, query strings, browser back/forward, and 404 pages.
+React Router. Vue Router. Svelte's router. Every single-page app framework ships one — but they all solve the same problem: map URL paths to JavaScript functions without ever touching a server. When you click a link in a well-built SPA, the browser doesn't make an HTTP request. Instead, JavaScript intercepts the click, updates the URL using `history.pushState`, and calls a matching handler that swaps out the page content. Understanding this mechanism puts you in control of every routing decision you make. In this chapter you build exactly that — a 60-line router that handles named params, query strings, browser back/forward, and 404 pages. After this, React Router's `<Route path="/users/:id">` will have no mystery left in it.
 
 ---
 
 ## The Problem
 
 You have a multi-page app — a home page, a user list, user detail pages with dynamic IDs, a blog with tag filtering. In a traditional website, each URL triggers a server request. In a single-page app, JavaScript handles everything: the URL changes but no request is made. Build the router and you'll understand how React Router's `<Route path="/users/:id">` works at the machine level.
+
+---
+
+## Building It Step by Step
+
+### v1 — Hash Router (15 lines)
+
+Before the History API existed, SPAs used `#`-based URLs. The hash portion of a URL (`#/users/1`) is never sent to the server — it's purely client-side. This makes it the simplest possible router: no `pushState`, no `popstate`, just `hashchange`.
+
+```javascript
+class HashRouter {
+  constructor() {
+    this.routes = [];
+    window.addEventListener('hashchange', () => this._dispatch());
+  }
+
+  get(pattern, handler) {
+    this.routes.push({ pattern, handler });
+    return this;
+  }
+
+  _dispatch() {
+    const path = location.hash.slice(1) || '/';  // '#/users/1' → '/users/1'
+    for (const { pattern, handler } of this.routes) {
+      if (path === pattern) {
+        handler({ path });
+        return;
+      }
+    }
+  }
+
+  start() { this._dispatch(); return this; }
+}
+
+// Usage:
+const router = new HashRouter();
+router
+  .get('/',       ctx => { app.innerHTML = '<h1>Home</h1>'; })
+  .get('/users',  ctx => { app.innerHTML = '<h1>Users</h1>'; })
+  .start();
+// URLs look like: myapp.com/#/users
+```
+
+This is already useful. You can pass the router around, register routes anywhere in your code, and the `hashchange` event fires reliably. The limitation: no dynamic params (`:id`), no query strings, and the `#` in every URL.
+
+### v2 — Upgrade to the History API
+
+`history.pushState` gives you clean URLs (`/users/1` instead of `#/users/1`). The trade-off: the server must serve your `index.html` for all paths, because a direct browser request to `/users/1` would hit the server. In development (and most deployment setups), this is handled by config.
+
+```javascript
+class Router {
+  constructor(outlet) {
+    this.routes    = [];
+    this._notFound = null;
+    this._outlet   = outlet;
+
+    // pushState doesn't fire popstate — but Back/Forward do
+    window.addEventListener('popstate', () => {
+      this._dispatch(location.pathname + location.search);
+    });
+  }
+
+  get(path, handler) {
+    this.routes.push({ pattern: path, handler });  // still exact match for now
+    return this;
+  }
+
+  navigate(path) {
+    history.pushState({}, '', path);  // ← update URL, no server request
+    this._dispatch(path);              // ← call the matching handler
+  }
+
+  _dispatch(fullPath) {
+    for (const { pattern, handler } of this.routes) {
+      if (fullPath === pattern) {
+        handler({ path: fullPath });
+        return;
+      }
+    }
+    if (this._notFound) this._notFound({ path: fullPath });
+  }
+
+  start() {
+    this._dispatch(location.pathname + location.search);
+    return this;
+  }
+}
+```
+
+Same route registration as before. Same patterns. The only change: `navigate()` uses `pushState` instead of setting `location.hash`, and we listen for `popstate` instead of `hashchange`.
+
+### v3 — Named Params, Query Strings, and `_compile()`
+
+The final version replaces exact string matching with RegExp pattern matching, adds `URLSearchParams` for query strings, and moves route registration to use `_compile()`.
+
+```javascript
+get(path, handler) {
+  this.routes.push({
+    pattern:  this._compile(path),  // '/users/:id' → RegExp
+    handler,
+    original: path,
+  });
+  return this;
+}
+
+_compile(path) {
+  const pattern = path
+    .replace(/\//g, '\\/')
+    .replace(/:(\w+)/g, '(?<$1>[^\\/]+)')  // :id → named capture group
+    .replace(/\*/g, '.*');
+  return new RegExp(`^${pattern}\\/?$`);
+}
+
+_dispatch(fullPath) {
+  const [pathname, search] = fullPath.split('?');
+  const query = this._parseQuery(search ? '?' + search : '');
+
+  for (const route of this.routes) {
+    const match = pathname.match(route.pattern);
+    if (match) {
+      route.handler({ path: pathname, params: match.groups || {}, query });
+      return;
+    }
+  }
+
+  if (this._notFound) this._notFound({ path: pathname, query, params: {} });
+}
+```
+
+Now `/users/:id` matches `/users/42`, and `ctx.params.id === '42'`. Query strings like `?tag=history` land in `ctx.query.tag`.
 
 ---
 
@@ -119,6 +249,35 @@ history.pushState({}, '', '/users/42');
 
 That's the entire foundation of client-side routing. Everything else is just: know which path you're on, find the matching handler, call it.
 
+```
+Traditional (Server-Side) Navigation:
+  User clicks /users/42
+         │
+         ▼
+  Browser sends HTTP GET /users/42
+         │
+         ▼
+  Server returns new HTML page
+         │
+         ▼
+  Browser replaces entire page ← full reload
+
+SPA (Client-Side) Navigation:
+  User clicks /users/42
+         │
+         ▼
+  e.preventDefault()  ← stops browser
+         │
+         ▼
+  history.pushState({}, '', '/users/42')  ← URL changes, NO request
+         │
+         ▼
+  router._dispatch('/users/42')  ← JS runs
+         │
+         ▼
+  app.innerHTML = renderUserDetail(ctx)  ← only content changes
+```
+
 The `navigate` method wraps this up cleanly:
 
 ```javascript
@@ -143,6 +302,27 @@ window.addEventListener('popstate', () => {
 ### `_compile()` — Path Patterns to RegExp
 
 The most technical piece: converting a route pattern like `/users/:id` into a regular expression that matches real URLs and extracts the param values.
+
+```
+Route Pattern → RegExp
+──────────────────────────────────────────────────────
+'/users/:id/posts/:postId'
+       │
+  _compile()
+       │
+       ▼
+/^\/users\/(?<id>[^\/]+)\/posts\/(?<postId>[^\/]+)\/?$/
+
+URL: '/users/42/posts/7'
+       │
+  .match(pattern)
+       │
+       ▼
+match.groups = { id: '42', postId: '7' }
+       │
+       ▼
+ctx.params = { id: '42', postId: '7' }
+```
 
 ```javascript
 _compile(path) {
@@ -255,15 +435,79 @@ This is the same `return this` pattern from Chapter 6's jQuery, applied to a dif
 
 ---
 
-## Try It
+## Guided Try It — Auth Guard with `router.before(fn)`
 
-1. **Add a `before` hook**: A function registered with `router.before(fn)` that runs before every dispatch. If `fn` returns `false`, the navigation is cancelled. Useful for auth guards: `router.before(() => isLoggedIn() || router.navigate('/login'))`.
+**The problem**: Add `router.before(fn)` — a hook that runs before every navigation. If `fn` returns `false`, cancel the navigation. This is how auth guards work: `router.before(() => isLoggedIn() || router.navigate('/login'))`.
 
-2. **Add route aliases**: `router.alias('/home', '/')` — visiting `/home` dispatches the `/` handler without changing the URL further. Implement by adding a pre-dispatch check that rewrites paths.
+**Hint**: The hook needs to run inside `_dispatch`, before the route handler. Look at the flow of `_dispatch`: it splits the path, parses the query, then enters the `for` loop. Where should the hook check happen — before the loop, inside the loop, or after the matching route is found?
 
-3. **Add a loading state**: Between `navigate()` being called and the handler completing, show a loading indicator in the outlet. This matters when handlers are async (fetching data before rendering).
+**Step 1 — Add the hook storage and registration method.**
 
-4. **Persist query state in links**: When navigating with `router.navigate`, preserve existing query params by default unless explicitly cleared. Useful for maintaining a `?theme=dark` param across page changes.
+In the constructor, add `this._beforeHook = null`. Add a `before` method that stores the hook:
+
+```javascript
+constructor(outlet) {
+  this.routes       = [];
+  this._notFound    = null;
+  this._outlet      = outlet;
+  this._onNavigate  = null;
+  this._beforeHook  = null;  // ← add this
+
+  window.addEventListener('popstate', () => {
+    this._dispatch(location.pathname + location.search);
+  });
+}
+
+before(fn) {
+  this._beforeHook = fn;
+  return this;
+}
+```
+
+**Step 2 — Check the hook in `_dispatch`, before the route loop.**
+
+Build `ctx` first (it gives the hook useful info about the destination), then check:
+
+```javascript
+_dispatch(fullPath) {
+  const [pathname, search] = fullPath.split('?');
+  const query = this._parseQuery(search ? '?' + search : '');
+  const ctx   = { path: pathname, query };
+
+  // ← add this block
+  if (this._beforeHook) {
+    const proceed = this._beforeHook(ctx);
+    if (proceed === false) return;  // cancelled — do nothing
+  }
+
+  for (const route of this.routes) {
+    const match = pathname.match(route.pattern);
+    if (match) {
+      ctx.params       = match.groups || {};
+      ctx.matchedRoute = route.original;
+      route.handler(ctx);
+      if (this._onNavigate) this._onNavigate(ctx);
+      return;
+    }
+  }
+
+  if (this._notFound) this._notFound({ path: pathname, query, params: {} });
+}
+```
+
+**Usage:**
+
+```javascript
+router.before(ctx => {
+  if (ctx.path.startsWith('/admin') && !isLoggedIn()) {
+    router.navigate('/login');
+    return false;  // cancel the original navigation
+  }
+  // returning undefined (not false) lets navigation proceed
+});
+```
+
+**Think about it**: What would happen if the `before` hook itself calls `router.navigate('/login')`? Is there a risk of infinite recursion, and under what conditions? How would you guard against it — and what does React Router do differently to avoid this problem?
 
 ---
 

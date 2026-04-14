@@ -12,6 +12,92 @@ The virtual DOM solution: describe the desired UI as a tree of plain objects, th
 
 ---
 
+## Building It Step by Step
+
+### v1 — The Naive Approach: Wipe and Rebuild
+
+Start with the simplest possible thing that works:
+
+```javascript
+function render(vnode) {
+  if (vnode.type === '#text') return document.createTextNode(vnode.value);
+  const el = document.createElement(vnode.type);
+  for (const [key, val] of Object.entries(vnode.props || {})) {
+    if (key.startsWith('on')) el[key.toLowerCase()] = val;
+    else el.setAttribute(key, val);
+  }
+  vnode.children.forEach(child => el.appendChild(render(child)));
+  return el;
+}
+
+function update() {
+  mountPoint.innerHTML = '';                        // wipe everything
+  mountPoint.appendChild(render(view(state)));     // rebuild from scratch
+}
+```
+
+This is fifteen words of logic and it works. Open the browser, click a button, the UI updates. But open DevTools and watch the Elements panel: every click destroys and recreates the entire DOM tree.
+
+Now stress-test it: add 500 todo items, type in the input field, then toggle a checkbox. Your cursor jumps out of the input — because the `<input>` element was destroyed and recreated. Add a CSS `transition: opacity 0.3s` on list items — transitions never play, because elements are replaced before they can animate. On a mobile device with 1000 items, the "rebuild" causes a full layout recalculation: 1000 `createElement` calls, 1000 `setAttribute` calls, one giant paint. A counter incrementing from 4 to 5 re-renders the entire page.
+
+The bottleneck is not JavaScript — it's that every DOM operation is expensive because the browser must recalculate layout and repaint. The fix: touch only what changed.
+
+### v2 — Add `patch()` for the Common Cases
+
+The key insight: most state changes are small. A counter update changes one text node. A checkbox toggle changes one class. Rather than rebuilding everything, compare old and new vnodes and make surgical updates.
+
+Handle the 80% case first — text changes and type mismatches — without recursing into children:
+
+```javascript
+function patch(parent, oldVNode, newVNode, i = 0) {
+  // New node: add it
+  if (!oldVNode) {
+    parent.appendChild(render(newVNode));
+    return;
+  }
+
+  const el = parent.childNodes[i];
+
+  // Removed node: delete it
+  if (!newVNode) {
+    parent.removeChild(el);
+    return;
+  }
+
+  // Text change: update in place
+  if (oldVNode.type === '#text' && newVNode.type === '#text') {
+    if (oldVNode.value !== newVNode.value) el.nodeValue = newVNode.value;
+    return;
+  }
+
+  // Type changed (div → span): replace the whole subtree
+  if (oldVNode.type !== newVNode.type) {
+    parent.replaceChild(render(newVNode), el);
+    return;
+  }
+
+  // Same type: we'd recurse here — for now, do nothing
+}
+```
+
+This already handles the counter app perfectly. Incrementing `count` from 4 to 5 touches exactly one text node. The `<input>` element is never touched, so focus is preserved. CSS transitions play because elements are never destroyed.
+
+### v3 — Add `updateProps` and `reconcileChildren`
+
+For the full diff, we need to update attributes when they change, and recursively diff the children list:
+
+```javascript
+// After the type-match case in patch():
+updateProps(el, newVNode.props, oldVNode.props);
+reconcileChildren(el, oldVNode.children, newVNode.children);
+```
+
+`updateProps` does two passes: first remove deleted props, then set new or changed ones. It uses `!==` comparison — which is why immutable state is so valuable here. If an object reference didn't change, the prop didn't change, and `setProp` is never called.
+
+`reconcileChildren` loops to `Math.max(old.length, new.length)` — handling both additions (old is shorter) and removals (new is shorter) in one loop. The `removals` counter adjusts the real DOM index as nodes are removed (see the diagram in the reconcileChildren section).
+
+---
+
 ## The Complete Program
 
 `vdom.html` — a todo list with a counter, filters, and a live inspector showing every DOM operation as it happens.
@@ -232,7 +318,38 @@ The virtual DOM's value isn't that it avoids touching the DOM — it still touch
 
 ### `patch()` — The Reconciler
 
-`patch()` is the core of the library. It takes the parent element, the old vnode at position `i`, the new vnode at position `i`, and makes the real DOM match the new description with the minimum number of operations:
+`patch()` is the core of the library. It takes the parent element, the old vnode at position `i`, the new vnode at position `i`, and makes the real DOM match the new description with the minimum number of operations.
+
+```
+patch(parent, oldVNode, newVNode, i)
+─────────────────────────────────────────────────────────
+         ┌─────────────┐
+         │  old exists?│
+         └─────────────┘
+            │         │
+           NO         YES
+            │         │
+      append(new)   ┌─────────────┐
+                    │  new exists?│
+                    └─────────────┘
+                       │       │
+                      NO      YES
+                       │       │
+                  remove(old)  ┌─────────────────┐
+                               │  both #text?    │
+                               └─────────────────┘
+                                  │           │
+                                 YES          NO
+                                  │           │
+                         update          ┌─────────────┐
+                         nodeValue       │ same type?  │
+                                         └─────────────┘
+                                            │       │
+                                           NO      YES
+                                            │       │
+                                        replaceChild  updateProps()
+                                                      reconcileChildren()
+```
 
 ```javascript
 function patch(parent, oldVNode, newVNode, i = 0) {
@@ -324,7 +441,29 @@ function reconcileChildren(parent, oldChildren, newChildren) {
 
 The loop goes to `maxLen` — the longer of the two arrays — so it handles both additions (old is shorter: `oldChildren[i]` is `undefined`) and removals (new is shorter: `newChildren[i]` is `undefined`).
 
-The `removals` counter solves an index-shifting problem. When `patch` removes a child at index `j`, the real DOM's `childNodes` shifts: what was at `j+1` is now at `j`. Without the adjustment, the next call would grab the wrong node. Tracking removals and subtracting from `i` keeps the real DOM index aligned with the vnode index.
+The `removals` counter solves an index-shifting problem. The diagram makes it concrete:
+
+```
+Why `removals` matters
+─────────────────────────────────────────────────────────
+State: oldChildren=[A, B, C]  newChildren=[A, C]
+       (B was removed from the list)
+
+DOM before: [domA, domB, domC]  (indices 0, 1, 2)
+
+Loop i=0: patch(domA, A)  → same, no change
+Loop i=1: patch(domB, B, C) → different! replaces B with C
+          removes B from DOM → DOM is now [domA, domC]
+Loop i=2: patch(domC, C, undefined) → removes C!
+          But wait — domC is now at index 1, not 2
+
+Without `removals` counter: wrong node removed!
+With `removals` counter (i - removals):
+  i=1: index = 1-0 = 1 ✓  (domB at position 1)
+  i=2: index = 2-1 = 1 ✓  (domC now at position 1 after removal)
+```
+
+When `patch` removes a child at index `j`, the real DOM's `childNodes` shifts: what was at `j+1` is now at `j`. Without the adjustment, the next call would grab the wrong node. Tracking removals and subtracting from `i` keeps the real DOM index aligned with the vnode index.
 
 ### The State → View → Patch Loop
 
@@ -352,7 +491,62 @@ This is the pattern React, Preact, and Vue all follow under the hood. The surfac
 
 ## Try It
 
-1. **Add a color theme toggle**: Add a `darkMode` boolean to state and pass it as a `className` on the outer `div` — `className: s.darkMode ? 'app dark' : 'app'`. Watch the DOM log when you toggle: only the `className` prop updates, nothing else.
+### Guided: Add Key-Based Reconciliation
+
+**The problem**: The current reconciler matches old and new children purely by position. Adding 'Buy milk' to the *start* of a todo list `[A, B, C]` produces `newChildren = ['Buy milk', A, B, C]`. The loop compares:
+
+- index 0: old=A, new='Buy milk' — different, update A's text
+- index 1: old=B, new=A — different, update B's text
+- index 2: old=C, new=B — different, update C's text
+- index 3: old=undefined, new=C — append a new node
+
+That's 4 DOM operations to prepend one item. With keys, the reconciler can see that A, B, and C haven't changed — they just moved. Result: 1 insertion.
+
+**Why it matters**: Without keys, adding an item to the start of a 100-item list causes 100 text-node updates. With keys, it causes 1 insertion. More critically: without keys, input fields in list items lose their typed text when anything is prepended above them. With keys, the `<input>` DOM node follows its item regardless of position.
+
+**Step 1** — In `reconcileChildren`, before the loop, build a map from key to old vnode index:
+
+```javascript
+function reconcileChildren(parent, oldChildren, newChildren) {
+  const oldKeyMap = new Map();
+  oldChildren.forEach((child, i) => {
+    if (child?.props?.key != null) {
+      oldKeyMap.set(child.props.key, i);
+    }
+  });
+  // ... rest of function
+}
+```
+
+This gives you O(1) lookup: given a key, find where it was in the old list.
+
+**Step 2** — In the loop, when the new child has a key, look it up to find its old vnode:
+
+```javascript
+for (let i = 0; i < newChildren.length; i++) {
+  const newChild = newChildren[i];
+  const key = newChild?.props?.key;
+
+  let oldChild;
+  if (key != null && oldKeyMap.has(key)) {
+    const oldIndex = oldKeyMap.get(key);
+    oldChild = oldChildren[oldIndex];
+    // oldChild is the same logical item — diff it against newChild
+  } else {
+    oldChild = oldChildren[i];  // fall back to position-based
+  }
+
+  patch(parent, oldChild, newChild, i);
+}
+```
+
+**Think about it**: What should `key` values be — sequential numbers, or something stable like item IDs? Consider: if you have items with `key={0}`, `key={1}`, `key={2}` and you remove the first one, the remaining items still have keys 1 and 2 — which are now at indices 0 and 1. The keys are stable identifiers, not positions, so this works correctly. But if you used array indices as keys, removing item 0 makes what was item 1 now have the same key as the old item 0 — defeating the whole purpose. Use item IDs, not array indices.
+
+What breaks if two siblings have the same key? The `Map` will only keep the last one — the first one is overwritten. The reconciler will try to reuse the same DOM node for two different items, causing incorrect display. Keys must be unique among siblings.
+
+---
+
+The other exercises, for independent exploration:
 
 2. **Animate the counter**: In CSS, add a transition or animation class. Add a `counting` boolean to state, set it `true` when increment/decrement is clicked, and remove it 300ms later with `setTimeout`. The DOM log will show the class being added and removed.
 

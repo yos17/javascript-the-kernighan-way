@@ -6,7 +6,140 @@ Lodash is one of the most downloaded JavaScript packages of all time. Millions o
 
 ## The Problem
 
-You have a dataset of books. You need to search them, filter by genre, sort by rating, group by category, and compute aggregate statistics — all driven by user input. You could write custom loops everywhere. But Lodash's insight is that these operations (map, filter, reduce, groupBy, sortBy) are universal patterns. Build them once as reusable functions, and every dataset problem becomes trivial to compose.
+In the early 2010s, JavaScript was rapidly moving from "page decoration" to full application logic. Developers were processing datasets in the browser — filtering tables, grouping results, debouncing search inputs. But the language itself was bare: no `Array.prototype.map`, no `Array.prototype.filter`, and patchy support across browsers.
+
+John-David Dalton released Lodash in 2012 to solve three things at once: (1) give every browser the same set of reliable collection utilities, (2) fill the gaps the standard library left (there was no built-in `groupBy`, `flatten`, or `debounce`), and (3) make the code read like the problem domain — `_.filter(books, b => b.genre === 'Sci-Fi')` is self-documenting in a way that raw `for` loops are not.
+
+The deeper insight: map, filter, reduce, groupBy, sortBy are not book-specific or user-specific. They are *universal patterns* over sequences. Build them once as reusable functions, and every dataset problem becomes a composition of parts you already understand. That idea — separating the *what* (transform, keep, accumulate) from the *how* (the specific function you pass in) — is the heart of functional programming.
+
+You have a dataset of books. You need to search them, filter by genre, sort by rating, group by category, and compute aggregate statistics — all driven by user input. You could write custom loops everywhere. Or you build the abstractions once, and compose them.
+
+---
+
+## Building It Step by Step
+
+### v1 — The Core Three: map, filter, reduce
+
+The first observation is that almost every collection operation is "loop + accumulate." Notice that map, filter, and reduce share the same skeleton:
+
+```javascript
+// v1: three operations, same pattern
+const _ = {};
+
+_.map = function(array, fn) {
+  const result = [];
+  for (let i = 0; i < array.length; i++) {
+    result.push(fn(array[i], i, array));
+  }
+  return result;
+};
+
+_.filter = function(array, fn) {
+  const result = [];
+  for (let i = 0; i < array.length; i++) {
+    if (fn(array[i], i, array)) result.push(array[i]);
+  }
+  return result;
+};
+
+_.reduce = function(array, fn, initial) {
+  let acc = initial;
+  for (let i = 0; i < array.length; i++) {
+    acc = fn(acc, array[i], i, array);
+  }
+  return acc;
+};
+```
+
+Why is `reduce` listed third but described as most powerful? Because with it, the other two are derivable:
+
+```javascript
+// map as reduce:
+xs => _.reduce(xs, (acc, x) => { acc.push(fn(x)); return acc; }, []);
+// filter as reduce:
+xs => _.reduce(xs, (acc, x) => { if (pred(x)) acc.push(x); return acc; }, []);
+```
+
+This version is usable. You can already process the book dataset. But writing pipeline logic is still verbose.
+
+### v2 — reduce Powers the Higher-Level Operations
+
+The second observation: `_.reduce` is so general that `groupBy`, `flatten`, and `uniq` are all just reductions.
+
+```javascript
+// v2: build higher-level operations from reduce
+
+_.groupBy = function(array, key) {
+  return _.reduce(array, function(groups, item) {
+    const k = typeof key === 'function' ? key(item) : item[key];
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(item);
+    return groups;
+  }, {});
+  // The accumulator starts as {}, and we build it up one item at a time.
+  // reduce's acc is the *running result* — here it's the groups object.
+};
+
+_.flatten = function(array) {
+  return _.reduce(array, function(result, item) {
+    return result.concat(Array.isArray(item) ? _.flatten(item) : item);
+  }, []);
+  // Recursive: if the item is itself an array, flatten it first before concat.
+};
+
+_.uniq = function(array) {
+  const seen = new Set();
+  return _.filter(array, function(item) {
+    if (seen.has(item)) return false;
+    seen.add(item);
+    return true;
+  });
+  // Built from _.filter — new library functions can use old library functions.
+};
+```
+
+This is the payoff of building a library: `groupBy` and `flatten` are implemented in terms of `reduce`, and `uniq` is implemented in terms of `filter`. The library grows by composition, not by copy-pasting loops.
+
+### v3 — A Different Category: Function Utilities
+
+The third observation is that `debounce`, `memoize`, `once`, and `pipe` are not about data at all. They are about *functions themselves* — when they fire, how they cache, how they compose. This is a new category of utility.
+
+```javascript
+// v3: function utilities — a completely different kind of tool
+
+// debounce: don't fire until input has paused
+_.debounce = function(fn, wait) {
+  let timer = null;
+  return function() {            // returns a NEW function
+    const args = arguments;
+    const ctx  = this;
+    clearTimeout(timer);         // cancel the previous pending call
+    timer = setTimeout(function() { fn.apply(ctx, args); }, wait);
+  };
+};
+
+// memoize: cache the result so expensive work runs only once per unique input
+_.memoize = function(fn) {
+  const cache = new Map();
+  return function() {
+    const key = JSON.stringify(Array.from(arguments));
+    if (cache.has(key)) return cache.get(key);
+    const result = fn.apply(this, arguments);
+    cache.set(key, result);
+    return result;
+  };
+};
+
+// pipe: feed output of each function into input of the next (left-to-right)
+_.pipe = function() {
+  const fns = Array.prototype.slice.call(arguments);
+  return function(value) {
+    return _.reduce(fns, function(acc, fn) { return fn(acc); }, value);
+  };
+};
+```
+
+Why separate category? Because `debounce` and `memoize` don't care what kind of data you have — they work on *any* function. The pattern is: take a function, return a smarter function. This is called a **higher-order function**. Understanding that distinction — collection utilities vs. function utilities — is understanding the full shape of Lodash.
 
 ---
 
@@ -215,6 +348,28 @@ _.merge = function(target, source) {
 
 ## Walkthrough
 
+### Data Pipeline with _
+
+```
+Data Pipeline with _
+─────────────────────────────────────────────────────
+BOOKS array
+   │
+   ├─ _.filter(books, b => b.genre === 'Sci-Fi')
+   │       keeps matching elements → new array
+   │
+   ├─ _.sortBy(result, b => -b.rating)
+   │       sorts by key/fn → new array (spread prevents mutation)
+   │
+   ├─ _.map(result, b => b.title)
+   │       transforms every element → ['Dune', 'Foundation', ...]
+   │
+   └─ _.groupBy(result, 'genre')
+           builds object → { 'Sci-Fi': [...], 'Fiction': [...] }
+```
+
+Each step takes an array and returns a new array (or object). Nothing is mutated. Each step is independent and testable. This is a pipeline.
+
 ### `_.map` — Transform Every Element
 
 `_.map` takes an array and a function, applies the function to each element, and returns a new array of results. The original array is never modified.
@@ -364,15 +519,87 @@ This is a lightweight form of currying. You take a general function and speciali
 
 ---
 
-## Try It
+## Guided Try It — Build `_.throttle` Step by Step
 
-1. **Add `_.countBy`**: Like `_.groupBy`, but returns counts instead of arrays. `_.countBy(books, 'genre')` should return `{ 'Sci-Fi': 3, 'Fiction': 3, ... }`. Hint: use `_.reduce`.
+**The problem**: You want to handle `mousemove` events, but firing a handler 60 times per second is too expensive. `_.debounce` doesn't work because it only fires *after* the mouse stops — you want to fire at most once every 200ms *while* the mouse is moving.
 
-2. **Make `_.sortBy` descending**: Add an optional third argument `direction = 'asc'`. When `'desc'`, reverse the comparison. Test it by sorting books by rating descending.
+This is `_.throttle`: the first call fires immediately, subsequent calls within the window are ignored, and after the window expires the next call fires again.
 
-3. **Add a `_.throttle`**: Like `_.debounce`, but fires at most once per `wait` ms (the first call fires immediately; subsequent calls within the window are ignored). Try wiring it to a `mousemove` handler and logging the position.
+**Hint**: The key difference from debounce is tracking *when the last call happened*, not *resetting a timer on every call*.
 
-4. **Cache size limit**: Modify `_.memoize` to accept an optional `maxSize` argument. When the cache exceeds that size, delete the oldest entry before adding the new one. (Hint: `Map` preserves insertion order, so `cache.keys().next().value` gives the oldest key.)
+**Step 1 — Check if we're inside a throttle window**
+
+The simplest possible throttle tracks whether a timer is running. If it is, skip the call:
+
+```javascript
+_.throttle = function(fn, wait) {
+  let waiting = false;
+  return function() {
+    if (waiting) return;   // inside the window — ignore
+    waiting = true;
+    fn.apply(this, arguments);
+    setTimeout(function() {
+      waiting = false;     // window expired — allow next call
+    }, wait);
+  };
+};
+```
+
+This fires immediately and suppresses calls for `wait` ms. But notice: the call that arrives *just before* the window expires is lost entirely. That's fine for many cases, but scroll handlers and progress indicators want the final position too.
+
+**Step 2 — Track the last-fire timestamp instead of a boolean**
+
+Using `Date.now()` lets you calculate exactly how long ago the last call fired, and skip the `setTimeout` overhead:
+
+```javascript
+_.throttle = function(fn, wait) {
+  let lastFired = 0;
+  return function() {
+    const now = Date.now();
+    if (now - lastFired < wait) return;   // still inside window
+    lastFired = now;
+    fn.apply(this, arguments);
+  };
+};
+```
+
+**Step 3 — The full implementation (trailing call)**
+
+To also fire once after the window closes with the most recent arguments, save them and schedule a trailing call:
+
+```javascript
+_.throttle = function(fn, wait) {
+  let lastFired = 0;
+  let trailingTimer = null;
+  let trailingArgs = null;
+  let trailingCtx  = null;
+
+  return function() {
+    const now = Date.now();
+    const remaining = wait - (now - lastFired);
+
+    if (remaining <= 0) {
+      // Window has expired — fire immediately
+      clearTimeout(trailingTimer);
+      trailingTimer = null;
+      lastFired = now;
+      fn.apply(this, arguments);
+    } else {
+      // Inside window — save args for the trailing call
+      trailingArgs = arguments;
+      trailingCtx  = this;
+      clearTimeout(trailingTimer);
+      trailingTimer = setTimeout(function() {
+        lastFired = Date.now();
+        trailingTimer = null;
+        fn.apply(trailingCtx, trailingArgs);
+      }, remaining);
+    }
+  };
+};
+```
+
+**Think about it**: Step 1 (boolean flag) and Step 2 (timestamp) both suppress mid-window calls. Why does Step 2 handle clock drift and tab-switching better? And what does the trailing call in Step 3 give you that Steps 1 and 2 don't? (Consider a progress bar that needs to show the final scroll position.)
 
 ---
 
@@ -521,6 +748,7 @@ The key insight: `fn.length` gives the number of declared parameters. `curried` 
 | `_.groupBy` | Built from `_.reduce`; shows how library functions compose |
 | `_.sortBy` | Uses spread `[...array]` to avoid mutating the original |
 | `_.debounce` | Closure over `timer`; delays execution until input pauses |
+| `_.throttle` | Closure over timestamp; limits execution rate while still firing |
 | `_.memoize` | `Map` cache keyed by `JSON.stringify(args)`; trades memory for speed |
 | `_.once` | Closure over `called` flag; guards one-time initialisation |
 | `_.partial` | Pre-fills arguments; specialises a general function |

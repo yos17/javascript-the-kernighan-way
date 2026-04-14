@@ -6,7 +6,134 @@ jQuery was the dominant JavaScript library for over a decade. At its peak, it ra
 
 ## The Problem
 
-You have a web page with navigation, tabs, accordions, modals, and card filters. Wiring all of this with raw `document.querySelector` calls produces tangled, verbose code. jQuery's insight was that you could wrap a set of elements in an object whose methods all return the same object — enabling fluid, readable chains like `$('.btn').addClass('active').css('color', 'red').on('click', fn)`. Build the wrapper, and complex DOM work becomes simple.
+In the mid-2000s, writing cross-browser JavaScript was genuinely painful. Internet Explorer and Firefox implemented the DOM differently — `attachEvent` vs `addEventListener`, `innerText` vs `textContent`, broken `querySelectorAll` support. John Resig released jQuery in 2006 to solve that specific problem: one API that works everywhere.
+
+But jQuery's enduring influence isn't the browser-normalisation layer — modern browsers solved that. It's the *design* of the API. Resig made three choices that shaped the web:
+
+1. **Everything is a set.** `$('.btn')` doesn't give you one button — it gives you all of them. Every operation applies to the whole set automatically. You never write loops.
+
+2. **Everything chains.** `$('.btn').addClass('active').css('color', 'red').on('click', fn)` reads like a sentence. It works because every method returns the same wrapped object.
+
+3. **One listener, many elements.** Event delegation — attaching a single listener to a parent and identifying the real target when an event fires — means you can handle 1000 dynamic list items with one line of code.
+
+These three choices — set operations, method chaining, event delegation — are not jQuery-specific tricks. They're patterns that React, Vue, Angular, and every other framework inherited. Understanding them in jQuery, where the implementation is small enough to hold in your head, gives you the mental model for all of them.
+
+You have a web page with navigation, tabs, accordions, modals, and card filters. Wiring all of this with raw `document.querySelector` calls produces tangled, verbose code. Build the wrapper, and complex DOM work becomes simple.
+
+---
+
+## Building It Step by Step
+
+### v1 — Wrap a Single Element, Add One Method
+
+The simplest possible jQuery wraps one element and adds one method. It's barely useful, but the core idea is visible immediately:
+
+```javascript
+// v1: wrap one element, add .addClass()
+function $(selector) {
+  const element = document.querySelector(selector);  // just one element
+
+  return {
+    element,
+    addClass(cls) {
+      element.classList.add(cls);
+      // no return — can't chain yet
+    }
+  };
+}
+
+$('.btn').addClass('active');
+// Works, but only finds one element and can't chain
+```
+
+The key insight is already here: `$()` doesn't return an element — it returns a *plain object* that contains an element. This separation is what makes the API extensible.
+
+### v2 — Wrap an Array of Elements, Loop Internally
+
+The second observation: the real value of the wrapper is that every method loops over *all* matched elements, so callers never have to:
+
+```javascript
+// v2: wrap all matching elements
+function $(selector) {
+  const elements = Array.from(document.querySelectorAll(selector)); // all elements
+
+  return {
+    elements,
+    length: elements.length,
+
+    addClass(cls) {
+      elements.forEach(el => el.classList.add(cls));
+      // still no return — still can't chain
+    },
+
+    on(event, fn) {
+      elements.forEach(el => el.addEventListener(event, fn));
+      // loops internally — caller never sees the loop
+    }
+  };
+}
+
+$('.btn').addClass('active');
+// Now applies to ALL .btn elements
+// But $('.btn').addClass('active').on('click', fn) still crashes — returns undefined
+```
+
+Now the abstraction does real work. One call operates on many elements. But every method chain breaks because methods return `undefined`.
+
+### v3 — Return `this` for Chaining, Add Traversal
+
+The third observation: add one line to every method — `return this` — and the entire fluent API becomes possible. Then add traversal so chains can navigate the DOM:
+
+```javascript
+// v3: return this + traversal
+function $(selector, context) {
+  // normalise all input types to a flat array of elements
+  let elements;
+  if (typeof selector === 'string') {
+    elements = Array.from((context || document).querySelectorAll(selector));
+  } else if (selector instanceof Element) {
+    elements = [selector];
+  } else if (Array.isArray(selector)) {
+    elements = selector;
+  }
+
+  const api = {
+    elements,
+
+    addClass(cls) {
+      elements.forEach(el => el.classList.add(cls));
+      return this;    // ← the one line that makes chaining possible
+    },
+
+    on(event, fn) {
+      elements.forEach(el => el.addEventListener(event, fn));
+      return this;
+    },
+
+    // Traversal returns a NEW wrapped set — chaining continues on the new set
+    find(sel) {
+      const found = [];
+      elements.forEach(el => found.push(...el.querySelectorAll(sel)));
+      return $(found);    // ← new wrapper, same API, chain continues
+    },
+
+    closest(sel) {
+      return $(elements.map(el => el.closest(sel)).filter(Boolean));
+    }
+  };
+
+  return api;
+}
+
+// Now this works:
+$('.accordion-header')
+  .closest('.accordion-item')   // traverses up — returns new wrapper
+  .addClass('open')             // operates on new wrapper
+  .find('.accordion-body')      // traverses down — returns another new wrapper
+  .on('click', handleClick);    // attaches listeners to found elements
+```
+
+Adding `return this` to each method and making `find`/`closest` return new wrappers is the complete mechanism behind jQuery's fluent API. Everything else is filling in more methods.
 
 ---
 
@@ -218,6 +345,20 @@ $.delegate = function(parent, event, selector, fn) {
 
 ### The Wrapper Pattern — How `$()` Works
 
+```
+$('.card')  →  Wrapped Set
+               ┌─────────────────────────────────────┐
+               │ elements: [div.card, div.card, div.card] │
+               │                                      │
+               │ .addClass()   → forEach + classList  │
+               │ .on()         → forEach + addEventListener │
+               │ .find()       → forEach + querySelectorAll │
+               │ .closest()    → map + closest()       │
+               │ .text()       → elements[0].textContent │
+               └─────────────────────────────────────┘
+                        each method returns `this` ↑
+```
+
 The key idea in jQuery is a **wrapper**: `$('.btn')` doesn't return a DOM element. It returns a plain JavaScript object that *contains* an array of DOM elements and has methods for manipulating them.
 
 ```javascript
@@ -383,15 +524,77 @@ This is how the navigation tabs know which page to show without any hidden state
 
 ---
 
-## Try It
+## Guided Try It — Build `$.delegate` Step by Step
 
-1. **Add a `.addClass` animation**: After `.addClass`, start a `setTimeout` that removes the class after 1 second. Call it `.flashClass(cls)`. Wire it to the filter buttons so they flash when clicked.
+**The problem**: You have a list of 200 items. Each item has a delete button. You could attach 200 click listeners — one per button. Or you could attach one listener to the parent list. Event delegation is the second approach.
 
-2. **Add `.not(selector)`**: The inverse of `.filter()`. `$('.card').not('.hidden')` should return only visible cards. One line internally.
+The tricky part: the user might click the icon *inside* the button, not the button element itself. Your listener needs to find the button regardless of which child element was actually clicked.
 
-3. **Add `.replaceWith(html)`**: Replaces each element with the given HTML string. Use `insertAdjacentHTML` + `.remove()`.
+**Hint**: `e.target` is the exact element the user clicked. It might be a `<span>` inside your button. `e.target.closest(selector)` walks up from the click target until it finds a matching ancestor.
 
-4. **Make `$.delegate` support multiple events**: Allow `$.delegate(parent, 'click keydown', selector, fn)` by splitting on spaces and attaching one listener per event type.
+**Step 1 — Attach one listener to the parent**
+
+Instead of looping over children, attach to the container:
+
+```javascript
+$.delegate = function(parent, event, selector, fn) {
+  parent.addEventListener(event, function(e) {
+    // e.target is what was clicked — might be deep inside an item
+    console.log('clicked:', e.target);
+  });
+};
+```
+
+One listener covers all current *and future* children. If you add items to the list later, they're covered automatically with no extra code.
+
+**Step 2 — Find the matching ancestor**
+
+`e.target` may be a `<span>` or `<svg>` inside the item. Use `closest()` to walk up:
+
+```javascript
+$.delegate = function(parent, event, selector, fn) {
+  parent.addEventListener(event, function(e) {
+    const target = e.target.closest(selector);
+    // If the click was inside a matching element, target is that element.
+    // If not (user clicked the list background), target is null.
+    if (target) {
+      fn.call(target, e);
+    }
+  });
+};
+```
+
+Now `$.delegate(list, 'click', '.delete-btn', fn)` fires `fn` whenever any `.delete-btn` (or a child of one) is clicked.
+
+**Step 3 — Guard with `parent.contains`**
+
+There's a subtle bug: `closest()` walks all the way up the DOM tree. If the selector matches something *outside* the parent (say, a `.delete-btn` in a completely different part of the page that happens to be an ancestor), you'd fire incorrectly.
+
+```javascript
+$.delegate = function(parent, event, selector, fn) {
+  $(parent).on(event, function(e) {
+    const target = e.target.closest(selector);
+    if (target && parent.contains(target)) {   // ← guard: must be inside parent
+      fn.call(target, e, $(target));
+    }
+  });
+};
+```
+
+**Step 4 — Use it**
+
+```javascript
+$.delegate(document.querySelector('#item-list'), 'click', '.delete-btn', function(e, $btn) {
+  e.preventDefault();
+  $btn.closest('.list-item').remove();
+});
+```
+
+One listener. Works for 200 items. Works for items added later. Works even if the button contains an icon element.
+
+**Think about it**: What happens if you use `parent.addEventListener` instead of the `$(parent).on(...)` wrapper? What does wrapping in `$()` buy you here? And why is `parent.contains(target)` needed when `parent` is already the element we attached the listener to — can't `closest()` only return descendants?
+
+(Answer: `closest()` matches on the element *itself* first, then walks up. So if the matched element is the `parent` itself or an ancestor of `parent`, `contains` catches it.)
 
 ---
 
@@ -550,6 +753,7 @@ $.ajax('/api/users', { method: 'POST', data: { name: 'Ada' } })
 | Set operations | Methods loop over all matched elements internally; callers never loop |
 | `.find()` / `.closest()` | Traversal returns a new wrapped set — all subsequent methods apply to it |
 | Event delegation | One listener on a parent, `closest()` to identify the true target |
+| `parent.contains(target)` | Guards against `closest()` matching outside the parent boundary |
 | `data-*` attributes | `element.dataset` provides a clean read/write interface to `data-*` |
 | `insertAdjacentHTML` | Faster than `.innerHTML +=` — doesn't re-parse the whole element |
 | `$.ready()` | Guards code that runs before the DOM is built |

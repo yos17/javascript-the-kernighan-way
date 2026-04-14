@@ -6,7 +6,171 @@ Jest. Mocha. Vitest. Every JavaScript project uses one of them. But they're not 
 
 ## The Problem
 
-You have a math utility library — `add`, `multiply`, `factorial`, `isPrime`, `arraySum`. How do you know it works? You could run it manually and check the output. But that doesn't scale, doesn't repeat automatically, and doesn't tell you which specific case broke. A test framework solves this: it runs every case for you, catches failures, and reports exactly what went wrong and where.
+You have a math utility library — `add`, `multiply`, `factorial`, `isPrime`, `arraySum`. How do you know it works?
+
+You could run it manually and check the output. But that doesn't scale, doesn't repeat automatically, and doesn't tell you which specific case broke. And when a bug gets fixed, how do you know the fix didn't break something else that was working before?
+
+This is the real problem test frameworks solve: not just running checks once, but making correctness *verifiable on demand, for every case, with precise failure messages*. A test suite is a machine you build once and run forever. Build the machine yourself and the black box becomes a handful of familiar ideas: arrays, try/catch, and functions that throw.
+
+---
+
+## Test Lifecycle
+
+```
+Test Lifecycle
+──────────────────────────────────────────────────────────
+describe('Math', () => {        ← runs IMMEDIATELY
+  it('add works', () => { ... }) ← REGISTERS test (doesn't run yet)
+  it('mul works', () => { ... }) ← REGISTERS test
+})                               ← describe returns
+
+runner.run()                     ← NOW tests execute
+  ├─ beforeEach() hooks
+  ├─ try { test.fn() }           ← if no throw → PASS ✓
+  │        └─ expect(x).toBe(y)  ← throws AssertionError if wrong
+  └─ catch (err) → FAIL ✗
+       └─ err.message → "Expected 4 to be 5"
+```
+
+`describe` runs *immediately* to collect registrations. `run()` executes them later. This two-phase design — collect first, execute second — is why test frameworks can report results for all tests even when early ones fail.
+
+---
+
+## Building It Step by Step
+
+### v1 — The Core Insight (15 lines)
+
+The entire foundation of any test framework is this: **a passing test is a function that doesn't throw; a failing test is a function that does.** Nothing else.
+
+```javascript
+function run(tests) {
+  let passed = 0, failed = 0;
+
+  for (const { name, fn } of tests) {
+    try {
+      fn();
+      console.log(`  ✓ ${name}`);
+      passed++;
+    } catch (err) {
+      console.log(`  ✗ ${name}: ${err.message}`);
+      failed++;
+    }
+  }
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+}
+
+// Usage:
+run([
+  { name: 'add(2,3) is 5', fn: () => { if (add(2, 3) !== 5) throw new Error('Expected 5'); } },
+  { name: 'add(0,0) is 0', fn: () => { if (add(0, 0) !== 0) throw new Error('Expected 0'); } },
+]);
+```
+
+Why this works: `run` doesn't know or care what the test does. It only cares whether calling it throws. If the test function throws, that's a failure. If it returns normally, that's a pass.
+
+The limitation of v1: tests live in a flat list, assertions are verbose, and there's no grouping. The structure doesn't match how we think about software — "the `add` function" contains several related cases.
+
+### v2 — Structure: `describe()` and `it()`
+
+Add two functions: `describe` names a group of related tests, and `it` registers a single test case. Neither runs tests yet — they just organize the collection phase.
+
+```javascript
+class MiniTest {
+  constructor() {
+    this.suites = [];
+    this.currentSuite = null;
+  }
+
+  describe(name, fn) {
+    const suite = { name, tests: [] };
+    this.suites.push(suite);
+    const prev = this.currentSuite;
+    this.currentSuite = suite;
+    fn();                      // runs immediately — collects it() calls
+    this.currentSuite = prev;  // restore, so describe() can nest
+  }
+
+  it(name, fn) {
+    this.currentSuite.tests.push({ name, fn });
+  }
+
+  run() {
+    for (const suite of this.suites) {
+      console.log(`\n${suite.name}`);
+      for (const test of suite.tests) {
+        try {
+          test.fn();
+          console.log(`  ✓ ${test.name}`);
+        } catch (err) {
+          console.log(`  ✗ ${test.name}: ${err.message}`);
+        }
+      }
+    }
+  }
+}
+
+// Usage:
+const t = new MiniTest();
+t.describe('add', () => {
+  t.it('returns sum of two numbers', () => {
+    if (add(2, 3) !== 5) throw new Error('Expected 5');
+  });
+});
+t.run();
+```
+
+The key move: `describe`'s callback runs *synchronously right now*, not later. This is what populates `suite.tests`. The `prev`/restore pattern for `currentSuite` is what lets you nest `describe` blocks.
+
+The remaining problem: throwing raw `new Error('Expected 5')` inside every test is tedious and inconsistent. We need an assertion API.
+
+### v3 — Assertions: `expect()` with Matchers and `.not`
+
+Add `expect(actual)` which returns an object of *matcher functions*. Each matcher throws a descriptive `AssertionError` on failure and does nothing on success.
+
+```javascript
+function expect(actual) {
+  function fail(msg) {
+    const err = new Error(msg);
+    err.name = 'AssertionError';
+    throw err;
+  }
+
+  const matchers = {
+    toBe(expected) {
+      if (!Object.is(actual, expected))
+        fail(`Expected ${JSON.stringify(actual)} to be ${JSON.stringify(expected)}`);
+    },
+    toEqual(expected) {
+      if (JSON.stringify(actual) !== JSON.stringify(expected))
+        fail(`Expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`);
+    },
+    toBeTruthy() {
+      if (!actual) fail(`Expected ${JSON.stringify(actual)} to be truthy`);
+    },
+    // ... more matchers
+  };
+
+  // Auto-generate .not inverses for every matcher
+  matchers.not = {};
+  for (const [name, fn] of Object.entries(matchers)) {
+    if (name === 'not') continue;
+    matchers.not[name] = function(...args) {
+      let threw = false;
+      try { fn.apply(null, args); } catch (e) { threw = true; }
+      if (!threw) fail(`Expected NOT to satisfy .${name}()`);
+    };
+  }
+
+  return matchers;
+}
+
+// Usage is now readable:
+t.it('returns sum', () => expect(add(2, 3)).toBe(5));
+t.it('not negative', () => expect(add(2, 3)).not.toBeLessThan(0));
+```
+
+Why `.not` is auto-generated rather than hand-written: if you have 12 matchers, writing 12 inverses by hand means 24 functions that must stay in sync. The loop generates all 12 inverses from one rule — "if the original wouldn't have thrown, I throw instead."
 
 ---
 
@@ -332,15 +496,98 @@ expect(() => factorial(-1)).toThrow();
 
 ---
 
-## Try It
+## Guided Try It — Adding Async Test Support
 
-1. **Add a `.skip` test**: In the test editor, write `it.skip('this test is skipped', () => { ... })`. Add support for `it.skip` by checking if the test's `fn` is `undefined` — or add an `it.skip` property that sets `skip: true` without a function.
+**The problem**: You want to test `fetchUser(1)`, which returns a Promise. You write:
 
-2. **Add `describe.only`**: When any `describe.only` block exists, only run suites marked with `.only`. Implement this by adding an `only` flag to suites and filtering in `run()`.
+```javascript
+it('fetches user data', async () => {
+  const user = await fetchUser(1);
+  expect(user.name).toBe('Ada');
+});
+```
 
-3. **Make `toEqual` handle `undefined`**: `JSON.stringify({a: undefined})` produces `"{}"`, losing the key. Write a custom deep equality function `deepEqual(a, b)` that handles `undefined`, `NaN`, and circular references (use a `Set` to track visited objects).
+You run the tests. They all show green. But `fetchUser` is broken — the server is down and it always rejects. Why did the test pass?
 
-4. **Add test timing thresholds**: Add `.toBeFasterThan(ms)` — an assertion that the wrapped function runs in under `ms` milliseconds. Use `performance.now()` before and after calling it.
+**Hint: look at `run()` in the complete program.** Find the line that calls `test.fn()`. What does it do with the return value?
+
+**Step 1 — Spot the bug.**
+
+The current `run()` ignores the return value:
+
+```javascript
+try {
+  test.fn();   // ← return value discarded
+  suiteResult.tests.push({ status: 'pass', ... });
+} catch (err) {
+  suiteResult.tests.push({ status: 'fail', ... });
+}
+```
+
+When `test.fn` is an `async` function, calling it starts the async work and immediately returns a Promise — it doesn't throw. So `run()` sees no throw, records a pass, and moves on. The Promise rejects later, but nobody is listening.
+
+**Step 2 — Capture the return value.**
+
+```javascript
+const result = test.fn();
+```
+
+Now we have the return value. How do we know if it's a Promise? We check for a `.then` method — the "thenable" duck-type check used throughout JavaScript:
+
+```javascript
+if (result && typeof result.then === 'function') {
+  // it's a Promise (or thenable)
+}
+```
+
+**Step 3 — Await the Promise.**
+
+```javascript
+const result = test.fn();
+if (result && typeof result.then === 'function') {
+  await result;
+}
+```
+
+But `await` requires us to be inside an `async` function. That means `run()` itself must become `async`:
+
+```javascript
+async run() {
+  const results = [];
+  for (const suite of this.suites) {
+    const suiteResult = { name: suite.name, tests: [] };
+    for (const test of suite.tests) {
+      const t0 = performance.now();
+      try {
+        const result = test.fn();
+        if (result && typeof result.then === 'function') {
+          await result;   // ← wait for the Promise to settle
+        }
+        suiteResult.tests.push({ name: test.name, status: 'pass',
+          duration: Math.round(performance.now() - t0) });
+      } catch (err) {
+        suiteResult.tests.push({ name: test.name, status: 'fail',
+          error: err.message, duration: Math.round(performance.now() - t0) });
+      }
+    }
+    results.push(suiteResult);
+  }
+  return results;
+}
+```
+
+When the Promise rejects, `await result` throws — and the `catch` block catches it. The test now correctly fails.
+
+**Step 4 — Call site.**
+
+Because `run()` is now `async`, you need to `await` it at the call site too:
+
+```javascript
+const results = await runner.run();
+renderResults(results);
+```
+
+**Think about it**: What would happen if you forgot the `await` in `await result`? Write a concrete test case — a function that returns a rejected Promise — and trace through what `run()` would record without the `await`. What status would it show, and why would that be a misleading result?
 
 ---
 
@@ -556,6 +803,7 @@ describe('with mocked console', () => {
 | `beforeEach` | Registers setup code; runs before every test in the suite |
 | `toThrow` | Wraps the function call in `try/catch` — requires `() => fn()` |
 | `performance.now()` | Microsecond timing for test duration measurement |
+| Async tests | Check `typeof result.then === 'function'`; make `run()` async |
 
 ---
 
