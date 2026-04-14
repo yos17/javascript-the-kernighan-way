@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Lodash — Chapter 5</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 0.25rem;
+    }
+    h1 span { color: #818cf8; }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 2rem;
+    }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .panel h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+    }
+
+    /* Controls */
+    .control-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 120px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      padding: 0.45rem 0.75rem;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #818cf8; }
+
+    select {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      padding: 0.45rem 0.6rem;
+      outline: none;
+    }
+
+    button {
+      background: #3730a3;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.45rem 0.9rem;
+      transition: background 0.15s;
+    }
+    button:hover { background: #4338ca; }
+    button.secondary {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+    }
+    button.secondary:hover { background: #273548; }
+
+    /* Book list */
+    .book-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 420px; overflow-y: auto; }
+    .book-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 0.7rem 0.9rem;
+      transition: border-color 0.15s;
+    }
+    .book-card:hover { border-color: #818cf8; }
+    .book-title { font-weight: 600; font-size: 0.95rem; color: #f1f5f9; }
+    .book-meta { font-size: 0.8rem; color: #94a3b8; margin-top: 0.2rem; }
+    .book-rating { display: inline-block; color: #fbbf24; margin-left: 0.4rem; }
+    .genre-tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      margin-left: 0.4rem;
+    }
+
+    /* Stats */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .stat-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.75rem;
+      text-align: center;
+    }
+    .stat-value { font-size: 1.4rem; font-weight: 700; color: #818cf8; }
+    .stat-label { font-size: 0.75rem; color: #64748b; margin-top: 0.15rem; }
+
+    /* Group display */
+    .group-section { margin-bottom: 0.75rem; }
+    .group-header { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #818cf8; margin-bottom: 0.4rem; letter-spacing: 0.06em; }
+    .group-items { font-size: 0.85rem; color: #cbd5e1; }
+
+    /* Pipeline REPL */
+    .repl-input {
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #a5f3fc;
+      padding: 0.6rem 0.75rem;
+      width: 100%;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+    .repl-output {
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #86efac;
+      padding: 0.6rem 0.75rem;
+      min-height: 60px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .repl-error { color: #f87171; }
+
+    .empty-state { color: #475569; font-size: 0.9rem; text-align: center; padding: 2rem; }
+
+    /* Memoize demo */
+    .memo-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .memo-result { font-family: monospace; font-size: 0.85rem; color: #86efac; }
+    .memo-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.1rem 0.45rem;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .memo-badge.hit { background: #14532d; color: #86efac; }
+    .memo-badge.miss { background: #451a03; color: #fbbf24; }
+  </style>
+</head>
+<body>
+
+<div style="max-width:1100px;margin:0 auto 2rem">
+  <h1>Build Your Own <span>Lodash</span></h1>
+  <p class="subtitle">Chapter 5 — A functional utility library from scratch</p>
+</div>
+
+<div class="layout">
+
+  <!-- Left: book explorer powered by _ -->
+  <div>
+    <div class="panel">
+      <h2>Book Explorer — powered by <code>_</code></h2>
+      <div class="control-row">
+        <input type="text" id="search" placeholder="Search titles…" autocomplete="off">
+        <select id="genre-filter">
+          <option value="">All genres</option>
+          <option value="Fiction">Fiction</option>
+          <option value="Non-Fiction">Non-Fiction</option>
+          <option value="Sci-Fi">Sci-Fi</option>
+          <option value="History">History</option>
+          <option value="Tech">Tech</option>
+        </select>
+        <select id="sort-by">
+          <option value="title">Sort: Title</option>
+          <option value="rating">Sort: Rating</option>
+          <option value="year">Sort: Year</option>
+          <option value="pages">Sort: Pages</option>
+        </select>
+      </div>
+      <div id="book-list" class="book-list"></div>
+    </div>
+  </div>
+
+  <!-- Right: stats + utilities demo -->
+  <div style="display:flex;flex-direction:column;gap:1rem;">
+
+    <div class="panel">
+      <h2>Stats (_.reduce, _.groupBy)</h2>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-value" id="stat-count">0</div>
+          <div class="stat-label">Books shown</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="stat-avg">0.0</div>
+          <div class="stat-label">Avg rating</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="stat-top"></div>
+          <div class="stat-label">Top genre</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="stat-pages">0</div>
+          <div class="stat-label">Total pages</div>
+        </div>
+      </div>
+      <div id="groups"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Memoize demo (_.memoize)</h2>
+      <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.75rem;">
+        Fibonacci is computed once per input, then cached. Watch the badge.
+      </p>
+      <div class="control-row">
+        <input type="text" id="fib-n" value="10" style="width:80px;flex:none;">
+        <button onclick="runFib()">Compute fib(n)</button>
+        <button class="secondary" onclick="clearFibCache()">Clear cache</button>
+      </div>
+      <div id="fib-log" style="max-height:110px;overflow-y:auto;"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Pipe / compose REPL (_.pipe)</h2>
+      <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.75rem;">
+        Enter JS — <code>_</code> is available. Try: <code>_.pipe(x => x * 2, x => x + 1)(5)</code>
+      </p>
+      <input type="text" class="repl-input" id="repl-input"
+        value="_.pipe(_.partial(_.map, [1,2,3,4,5]), xs => _.filter(xs, x => x > 2), xs => _.reduce(xs, (s,x) => s+x, 0))(x => x * x)">
+      <div id="repl-output" class="repl-output">// output appears here</div>
+      <div class="control-row" style="margin-top:0.5rem;">
+        <button onclick="runRepl()">Run</button>
+        <button class="secondary" onclick="document.getElementById('repl-input').value=''; document.getElementById('repl-output').textContent='// output appears here'; document.getElementById('repl-output').className='repl-output';">Clear</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: _ (Mini Lodash)
+//  Each function is implemented from scratch so you can see exactly what
+//  Lodash is doing under the hood.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _ = {};
+
+// ─── COLLECTION METHODS ───────────────────────────────────────────────────────
+// These mirror the built-in Array methods but work the same way internally.
+// Implementing them yourself shows you how .map/.filter/.reduce actually work.
+
+// _.map transforms every element of an array using a function.
+// It returns a new array — the original is never changed.
+_.map = function(array, fn) {
+  const result = [];
+  for (let i = 0; i < array.length; i++) {
+    result.push(fn(array[i], i, array));
+  }
+  return result;
+};
+
+// _.filter keeps only elements where fn(element) returns true.
+_.filter = function(array, fn) {
+  const result = [];
+  for (let i = 0; i < array.length; i++) {
+    if (fn(array[i], i, array)) result.push(array[i]);
+  }
+  return result;
+};
+
+// _.reduce folds an array down to a single value.
+// fn receives (accumulator, currentItem, index, array).
+_.reduce = function(array, fn, initial) {
+  let acc = initial;
+  for (let i = 0; i < array.length; i++) {
+    acc = fn(acc, array[i], i, array);
+  }
+  return acc;
+};
+
+// _.find returns the first item where fn returns true, or undefined.
+_.find = function(array, fn) {
+  for (let i = 0; i < array.length; i++) {
+    if (fn(array[i], i, array)) return array[i];
+  }
+  return undefined;
+};
+
+// _.every returns true only if fn returns true for ALL items.
+_.every = function(array, fn) {
+  for (const item of array) {
+    if (!fn(item)) return false;
+  }
+  return true;
+};
+
+// _.some returns true if fn returns true for AT LEAST ONE item.
+_.some = function(array, fn) {
+  for (const item of array) {
+    if (fn(item)) return true;
+  }
+  return false;
+};
+
+// _.chunk splits an array into groups of the given size.
+// _.chunk([1,2,3,4,5], 2) → [[1,2],[3,4],[5]]
+_.chunk = function(array, size) {
+  const result = [];
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+  return result;
+};
+
+// _.groupBy organises an array into an object keyed by a property or function.
+// key can be a string property name or a function that returns the key.
+_.groupBy = function(array, key) {
+  return _.reduce(array, function(groups, item) {
+    const k = typeof key === 'function' ? key(item) : item[key];
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(item);
+    return groups;
+  }, {});
+};
+
+// _.sortBy returns a new sorted array based on a property or function.
+// Does not mutate the original.
+_.sortBy = function(array, key) {
+  return [...array].sort(function(a, b) {
+    const va = typeof key === 'function' ? key(a) : a[key];
+    const vb = typeof key === 'function' ? key(b) : b[key];
+    return va < vb ? -1 : va > vb ? 1 : 0;
+  });
+};
+
+// _.flatten turns a nested array into a flat one (any depth).
+_.flatten = function(array) {
+  return _.reduce(array, function(result, item) {
+    return result.concat(Array.isArray(item) ? _.flatten(item) : item);
+  }, []);
+};
+
+// _.uniq removes duplicate values from an array.
+// Uses a Set internally — Set.has() is O(1), much faster than indexOf.
+_.uniq = function(array) {
+  const seen = new Set();
+  return _.filter(array, function(item) {
+    if (seen.has(item)) return false;
+    seen.add(item);
+    return true;
+  });
+};
+
+// ─── FUNCTION UTILITIES ───────────────────────────────────────────────────────
+
+// _.debounce returns a new function that only calls fn after `wait` ms of
+// inactivity. Every new call resets the timer.
+// Classic use case: don't fire a search request on every keystroke.
+_.debounce = function(fn, wait) {
+  let timer = null;
+  return function() {
+    const args = arguments;
+    const ctx  = this;
+    clearTimeout(timer);
+    timer = setTimeout(function() {
+      fn.apply(ctx, args);
+    }, wait);
+  };
+};
+
+// _.memoize caches the result of fn for each set of arguments.
+// Subsequent calls with the same args skip the computation and return cached.
+_.memoize = function(fn) {
+  const cache = new Map();
+  const memoized = function() {
+    const key = JSON.stringify(Array.from(arguments));
+    if (cache.has(key)) {
+      memoized.cacheHit = true;
+      return cache.get(key);
+    }
+    memoized.cacheHit = false;
+    const result = fn.apply(this, arguments);
+    cache.set(key, result);
+    return result;
+  };
+  memoized.cache = cache;
+  memoized.clearCache = function() { cache.clear(); };
+  return memoized;
+};
+
+// _.once wraps a function so it can only be called once.
+// Every subsequent call returns the first call's result.
+_.once = function(fn) {
+  let called = false;
+  let result;
+  return function() {
+    if (!called) {
+      called = true;
+      result = fn.apply(this, arguments);
+    }
+    return result;
+  };
+};
+
+// _.partial creates a new function with some arguments pre-filled.
+// _.partial(add, 10) returns a function that adds 10 to its argument.
+_.partial = function(fn) {
+  const preArgs = Array.prototype.slice.call(arguments, 1);
+  return function() {
+    const laterArgs = Array.prototype.slice.call(arguments);
+    return fn.apply(this, preArgs.concat(laterArgs));
+  };
+};
+
+// _.pipe composes functions left-to-right.
+// _.pipe(f, g, h)(x) is the same as h(g(f(x))).
+// The output of each function flows into the next as input.
+_.pipe = function() {
+  const fns = Array.prototype.slice.call(arguments);
+  return function(value) {
+    return _.reduce(fns, function(acc, fn) {
+      return fn(acc);
+    }, value);
+  };
+};
+
+// ─── OBJECT UTILITIES ─────────────────────────────────────────────────────────
+
+// _.pick returns a new object with only the specified keys.
+_.pick = function(obj) {
+  const keys = _.flatten(Array.prototype.slice.call(arguments, 1));
+  const result = {};
+  for (const key of keys) {
+    if (key in obj) result[key] = obj[key];
+  }
+  return result;
+};
+
+// _.omit returns a new object with the specified keys removed.
+_.omit = function(obj) {
+  const omitKeys = new Set(_.flatten(Array.prototype.slice.call(arguments, 1)));
+  const result = {};
+  for (const key of Object.keys(obj)) {
+    if (!omitKeys.has(key)) result[key] = obj[key];
+  }
+  return result;
+};
+
+// _.merge does a deep merge of source into target (both must be plain objects).
+_.merge = function(target, source) {
+  const result = Object.assign({}, target);
+  for (const [k, v] of Object.entries(source)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) &&
+        result[k] && typeof result[k] === 'object') {
+      result[k] = _.merge(result[k], v);
+    } else {
+      result[k] = v;
+    }
+  }
+  return result;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DEMO DATA AND UI
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const BOOKS = [
+  { title: 'Dune', author: 'Frank Herbert',         genre: 'Sci-Fi',      rating: 4.8, year: 1965, pages: 412 },
+  { title: 'Sapiens', author: 'Yuval Noah Harari',  genre: 'Non-Fiction', rating: 4.4, year: 2011, pages: 443 },
+  { title: '1984', author: 'George Orwell',          genre: 'Fiction',     rating: 4.7, year: 1949, pages: 328 },
+  { title: 'The Martian', author: 'Andy Weir',       genre: 'Sci-Fi',      rating: 4.6, year: 2011, pages: 369 },
+  { title: 'Thinking Fast and Slow', author: 'Daniel Kahneman', genre: 'Non-Fiction', rating: 4.2, year: 2011, pages: 499 },
+  { title: 'Brave New World', author: 'Aldous Huxley', genre: 'Fiction',   rating: 4.5, year: 1932, pages: 311 },
+  { title: 'SPQR', author: 'Mary Beard',             genre: 'History',     rating: 4.3, year: 2015, pages: 606 },
+  { title: 'The Pragmatic Programmer', author: 'Hunt & Thomas', genre: 'Tech', rating: 4.7, year: 1999, pages: 352 },
+  { title: 'Foundation', author: 'Isaac Asimov',    genre: 'Sci-Fi',      rating: 4.6, year: 1951, pages: 244 },
+  { title: 'Guns Germs Steel', author: 'Jared Diamond', genre: 'History', rating: 4.1, year: 1997, pages: 480 },
+  { title: 'Clean Code', author: 'Robert Martin',   genre: 'Tech',        rating: 4.4, year: 2008, pages: 431 },
+  { title: 'Crime and Punishment', author: 'Dostoevsky', genre: 'Fiction', rating: 4.6, year: 1866, pages: 551 },
+];
+
+const GENRE_COLORS = {
+  'Sci-Fi':      { bg: '#1e1b4b', color: '#a5b4fc' },
+  'Non-Fiction': { bg: '#14532d', color: '#86efac' },
+  'Fiction':     { bg: '#4a1942', color: '#e879f9' },
+  'History':     { bg: '#78350f', color: '#fcd34d' },
+  'Tech':        { bg: '#164e63', color: '#67e8f9' },
+};
+
+function stars(rating) {
+  const full = Math.round(rating);
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+function renderBooks(books) {
+  const list = document.getElementById('book-list');
+  if (books.length === 0) {
+    list.innerHTML = '<div class="empty-state">No books match your filters.</div>';
+    return;
+  }
+  list.innerHTML = books.map(b => {
+    const gc = GENRE_COLORS[b.genre] || { bg: '#1e293b', color: '#94a3b8' };
+    return `
+      <div class="book-card">
+        <div class="book-title">${b.title}
+          <span class="genre-tag" style="background:${gc.bg};color:${gc.color}">${b.genre}</span>
+        </div>
+        <div class="book-meta">
+          ${b.author} · ${b.year} · ${b.pages}p
+          <span class="book-rating">${stars(b.rating)} ${b.rating}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderStats(books) {
+  document.getElementById('stat-count').textContent = books.length;
+
+  const avgRating = books.length
+    ? (_.reduce(books, (s, b) => s + b.rating, 0) / books.length).toFixed(1)
+    : '—';
+  document.getElementById('stat-avg').textContent = avgRating;
+
+  const totalPages = _.reduce(books, (s, b) => s + b.pages, 0);
+  document.getElementById('stat-pages').textContent = totalPages.toLocaleString();
+
+  // Find top genre using groupBy + reduce
+  const byGenre = _.groupBy(books, 'genre');
+  let topGenre = '—', topCount = 0;
+  for (const [genre, list] of Object.entries(byGenre)) {
+    if (list.length > topCount) { topCount = list.length; topGenre = genre; }
+  }
+  document.getElementById('stat-top').textContent = topGenre;
+
+  // Render grouped list
+  const groupsEl = document.getElementById('groups');
+  const sorted = _.sortBy(Object.entries(byGenre), ([, list]) => -list.length);
+  groupsEl.innerHTML = sorted.map(([genre, list]) => `
+    <div class="group-section">
+      <div class="group-header">${genre} (${list.length})</div>
+      <div class="group-items">${list.map(b => b.title).join(', ')}</div>
+    </div>`).join('');
+}
+
+// Debounced version of the main update function — only runs 250 ms after
+// the user stops typing, rather than on every keystroke.
+const debouncedUpdate = _.debounce(updateDisplay, 250);
+
+function updateDisplay() {
+  const searchTerm = document.getElementById('search').value.toLowerCase();
+  const genreFilter = document.getElementById('genre-filter').value;
+  const sortKey = document.getElementById('sort-by').value;
+
+  // 1. Filter by genre (if selected)
+  let books = genreFilter
+    ? _.filter(BOOKS, b => b.genre === genreFilter)
+    : [...BOOKS];
+
+  // 2. Filter by search term
+  if (searchTerm) {
+    books = _.filter(books, b => b.title.toLowerCase().includes(searchTerm));
+  }
+
+  // 3. Sort
+  books = _.sortBy(books, sortKey === 'rating' || sortKey === 'pages' || sortKey === 'year'
+    ? b => -b[sortKey]   // descending for numbers
+    : sortKey);          // ascending for strings
+
+  renderBooks(books);
+  renderStats(books);
+}
+
+document.getElementById('search').addEventListener('input', debouncedUpdate);
+document.getElementById('genre-filter').addEventListener('change', updateDisplay);
+document.getElementById('sort-by').addEventListener('change', updateDisplay);
+
+// ─── Memoize demo ─────────────────────────────────────────────────────────────
+
+// Naive recursive fibonacci — O(2^n) without caching.
+// With memoize, each unique n is only computed once: O(n).
+function slowFib(n) {
+  if (n <= 1) return n;
+  return memoFib(n - 1) + memoFib(n - 2);
+}
+const memoFib = _.memoize(slowFib);
+
+function runFib() {
+  const n = parseInt(document.getElementById('fib-n').value, 10);
+  if (isNaN(n) || n < 0 || n > 40) {
+    alert('Enter a number between 0 and 40');
+    return;
+  }
+  const result = memoFib(n);
+  const hit = memoFib.cacheHit;
+  const log = document.getElementById('fib-log');
+  const badge = hit
+    ? '<span class="memo-badge hit">cache hit</span>'
+    : '<span class="memo-badge miss">computed</span>';
+  log.innerHTML = `<div class="memo-row">${badge} <span class="memo-result">fib(${n}) = ${result}</span></div>` + log.innerHTML;
+}
+
+function clearFibCache() {
+  memoFib.clearCache();
+  const log = document.getElementById('fib-log');
+  log.innerHTML = '<div class="memo-row"><span class="memo-badge miss">cache cleared</span></div>';
+}
+
+// ─── Pipe REPL ────────────────────────────────────────────────────────────────
+
+function runRepl() {
+  const input = document.getElementById('repl-input').value;
+  const output = document.getElementById('repl-output');
+  try {
+    // Make _ available in the eval scope
+    const result = Function('"use strict"; const _ = arguments[0]; return (' + input + ')')(  _);
+    output.textContent = JSON.stringify(result, null, 2);
+    output.className = 'repl-output';
+  } catch (err) {
+    output.textContent = '// Error: ' + err.message;
+    output.className = 'repl-output repl-error';
+  }
+}
+
+document.getElementById('repl-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') runRepl();
+});
+
+// ─── Initial render ───────────────────────────────────────────────────────────
+updateDisplay();
+</script>
+</body>
+</html>
