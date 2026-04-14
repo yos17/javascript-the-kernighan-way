@@ -1,131 +1,130 @@
 # Chapter 1: Hello, Browser
 
-In this chapter you'll build a Mad Libs story generator — a program that takes words you type in and weaves them into a funny story. It sounds simple, but to make it work you'll touch almost every foundational idea in JavaScript: storing values, building strings, reading from the page, and writing back to it. Everything in this book builds on what you learn here.
+## Why This Matters
 
----
+Every program you write in this book is a conversation between JavaScript and the browser. JavaScript holds the data — strings, numbers, objects. The browser holds the visible page — text, inputs, buttons. Your code reaches into the page, reads what the user typed, transforms it, and writes results back.
 
-## The Program
+This chapter introduces the three-way relationship you'll use constantly:
 
-`mad_libs.html` is a single file that runs entirely in your browser — no server, no install, nothing to configure. It shows seven input fields (a hero's name, some adjectives, a noun, a verb, a place, and so on). You fill them in, click **Generate Story!**, and a complete adventure story appears below with your words highlighted in yellow. If you leave any field blank, the program picks a random funny default so the story always works.
-
----
-
-## Open It First
-
-Before you read another word: find `mad_libs.html` in this folder, double-click it, and try it in your browser. Type in some words, click the button, read the story. Click **Clear** and try again with different words, or leave everything blank and see what the random defaults come up with.
-
-You'll understand the code much better once you've played with what it actually does.
-
----
-
-## Line-by-Line Walkthrough
-
-### `const` and `let` — storing values
-
-```javascript
-const nameDefaults = ['Zorbax the Mighty', 'Princess Noodlearms', 'Bob the Unstoppable', 'Captain Biscuit'];
+```
+JavaScript variables  ←→  DOM elements  ←→  What the user sees
 ```
 
-`const` creates a **variable** — a named box that holds a value. Here the box is called `nameDefaults` and it holds an array (a list) of funny default names. The `const` keyword means "this box will always hold the same thing — don't let me accidentally replace it." Use `const` for almost everything.
+By the end you'll know how to store data, build strings from pieces, and connect them to a live page. Every chapter from here on uses these exact same ideas — just in more interesting combinations.
+
+## The Program: Mad Libs Generator
+
+`mad_libs.html` takes seven words from the user (a name, some adjectives, a noun, a verb) and weaves them into a complete adventure story. Blank fields get funny random defaults so the story always works.
+
+Open it in your browser first. Play with it. Then read the walkthrough.
+
+## How It Works
+
+### Variables: Naming Your Data
 
 ```javascript
-const fieldIds = ['name', 'adjective1', 'noun1', 'verb', 'place', 'adjective2', 'noun2'];
+const nameDefaults = ['Zorbax the Mighty', 'Princess Noodlearms', 'Bob the Unstoppable'];
 ```
 
-Same idea: a `const` variable holding a list of strings. The name `fieldIds` is descriptive — it tells you exactly what's in the box without having to read the value.
+`const` creates a **variable** — a named container. `nameDefaults` is the name; the array of strings is the value. `const` means "this container won't be replaced with something else." Use it for almost everything.
 
-`let` works just like `const`, with one difference: you *can* replace what's inside it later. In this program we don't actually use `let` at the top level, but `forEach` and arrow functions use short-lived variables internally. The rule of thumb: start with `const`. If JavaScript complains that you're trying to reassign it, switch to `let`.
+When should you use `let` instead? When the value needs to change:
 
----
+```javascript
+let count = 0;
+count = count + 1;  // only works with let
+```
 
-### `document.getElementById()` — finding things on the page
+**Why not `var`?** Older JavaScript used `var`, but it has confusing scope rules. Modern JavaScript uses `const` and `let` exclusively. You'll never need `var` in this book.
+
+**Coming up:** In Chapter 5, every creature you create is stored in a `const` object. In Chapter 10, the weather data from an API arrives as a `const` variable. The naming changes; the concept stays the same.
+
+### Template Literals: Building Strings from Parts
+
+```javascript
+const story = `
+  Once upon a Tuesday, the brave hero ${h(name)} woke up to discover that their
+  bedroom was completely filled with ${h(adjective1)} soup.
+`;
+```
+
+A **template literal** starts and ends with backticks (`` ` ``), not quotes. The `${}` syntax inserts any JavaScript expression:
+
+```javascript
+const name = 'Alice';
+const greeting = `Hello, ${name}!`;  // → "Hello, Alice!"
+
+const a = 5, b = 3;
+const math = `${a} + ${b} = ${a + b}`;  // → "5 + 3 = 8"
+```
+
+**Why template literals instead of `+` concatenation?**
+
+```javascript
+// Old way — hard to read
+const story = "The hero " + name + " woke up in " + place + ".";
+
+// Template literal — reads like a sentence
+const story = `The hero ${name} woke up in ${place}.`;
+```
+
+The backtick version also spans multiple lines naturally, which is essential when building long HTML strings (you'll do this constantly in Chapters 6–12).
+
+**Coming up:** In Chapter 6, you'll build entire HTML elements as template literals and insert them into the page. In Chapter 10, you'll build API URLs with template literals: `` `https://wttr.in/${city}?format=j1` ``.
+
+### Reading from the Page: getElementById
+
+```javascript
+const name = document.getElementById('name').value.trim();
+```
+
+`document` is a special object the browser provides — it represents the entire page. `getElementById('name')` finds the `<input id="name">` element. `.value` reads whatever text the user typed. `.trim()` removes leading/trailing whitespace.
+
+This is a **chain** of three operations on one line. You can read it left to right: "the document → find element with id 'name' → get its value → trim whitespace."
+
+**The OR fallback:**
 
 ```javascript
 const name = document.getElementById('name').value.trim() || pickRandom(nameDefaults);
 ```
 
-`document` is a special object the browser gives you for free — it represents the entire web page. `getElementById('name')` searches through the page and returns the element whose `id` attribute equals `'name'`. In the HTML you can find this:
+An empty string `""` is **falsy** in JavaScript — it behaves like `false` in a boolean context. The `||` operator returns its right side when the left is falsy. So: if the field is empty, use a random default.
 
-```html
-<input type="text" id="name" placeholder="e.g. Zorbax the Mighty" />
-```
+**Coming up:** `document.getElementById` and `querySelector` are the foundation of all DOM work in Chapters 5–8. Chapter 6 builds an entire to-do list using nothing but these operations.
 
-Once we have that element, `.value` reads whatever text the user typed into it. `.trim()` removes any accidental spaces at the start or end. The whole chain — `document.getElementById('name').value.trim()` — is how JavaScript reaches into the page and grabs live user input.
-
----
-
-### Template literals — building strings with variables
-
-```javascript
-const story = `
-  Once upon a Tuesday, the brave hero ${h(name)} woke up to discover that their bedroom
-  was completely filled with ${h(adjective1)} soup.
-`;
-```
-
-A **template literal** is a string that starts and ends with backtick characters (`` ` ``), not quotes. The magic part is `${}`: anything you put between the curly braces gets evaluated and inserted into the string. So `${h(name)}` calls the function `h` with the value of `name`, and whatever that returns gets dropped right into the sentence.
-
-Template literals can also span multiple lines without any tricks, which is perfect for building a long story. Compare this to the old way of joining strings with `+` signs everywhere — template literals are much easier to read and write.
-
----
-
-### `innerHTML` — writing HTML into the page
+### Writing to the Page: innerHTML
 
 ```javascript
 document.getElementById('story-output').innerHTML = story;
 ```
 
-Just as `.value` reads text *from* an input, `.innerHTML` writes HTML *into* any element. Here we find the paragraph with `id="story-output"` and replace everything inside it with the story string we just built. We use `innerHTML` rather than `.textContent` because the story contains real HTML tags — `<span>`, `<br>`, `<em>`, `<strong>` — and `innerHTML` tells the browser to treat them as actual tags, not just display them as raw text.
+`.innerHTML` is the write counterpart to `.value`. It sets the HTML content *inside* an element. We use `innerHTML` (not `.textContent`) because `story` contains real HTML tags — `<span>`, `<em>`, `<br>` — that we want the browser to render, not display as text.
 
-The `.highlight` spans are what make the filled-in words appear with the yellow background. The `h()` function wraps any word in one:
+**Why wrap highlighted words in `<span>` tags?**
 
 ```javascript
 const h = (word) => `<span class="highlight">${word}</span>`;
 ```
 
-And the CSS does the coloring:
+The `h()` function wraps each user-provided word in a span. The CSS adds the yellow highlight. This separates concerns: JavaScript decides *which* words to highlight; CSS decides *how* highlights look.
 
-```css
-.highlight {
-  background: linear-gradient(120deg, #fef08a 0%, #fde68a 100%);
-  color: #92400e;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 5px;
-}
-```
+**Coming up:** In Chapter 6, you'll write far more complex HTML into the page — complete list items with checkboxes, buttons, and data attributes. The pattern is the same; the content is richer.
 
----
-
-### Showing and hiding the output card
+### Showing and Hiding Elements: classList
 
 ```javascript
-outputCard.classList.add('visible');
+outputCard.classList.add('visible');  // show the result
 ```
 
-The output card starts invisible — the CSS rule `#output-card { display: none; }` hides it. When the story is ready, we call `.classList.add('visible')`, which adds the class `visible` to the element. The CSS then overrides the `display: none`:
+The output card starts hidden (CSS: `display: none`). When the story is ready, adding the `visible` class makes it appear (CSS: `#output-card.visible { display: block }`). The JavaScript only manages the class; the CSS manages the appearance. This clean separation is a pattern you'll use throughout the book.
 
-```css
-#output-card.visible {
-  display: block;
-}
-```
+`classList` methods you'll see everywhere:
+- `.add('name')` — add a class
+- `.remove('name')` — remove a class
+- `.toggle('name')` — add if absent, remove if present
+- `.contains('name')` — check if it exists
 
-`classList` is an object attached to every element that lets you add, remove, or check CSS classes without touching the style directly. It's a cleaner way to show/hide things than setting `style.display` manually.
-
----
-
-### The `||` fallback — handling empty fields
-
-```javascript
-const name = document.getElementById('name').value.trim() || pickRandom(nameDefaults);
-```
-
-If the user leaves the Name field blank, `.value.trim()` returns an empty string `""`. In JavaScript, an empty string counts as **falsy** — it behaves like `false` when you need a yes/no answer. The `||` operator ("or") returns its right side when its left side is falsy. So: if the field is empty, use a random default. If the field has something in it, use that. This one line handles both cases.
-
----
-
-### `forEach` and arrow functions — doing something to a list
+### forEach and Arrow Functions: Processing Lists
 
 ```javascript
 fieldIds.forEach((id) => {
@@ -133,712 +132,196 @@ fieldIds.forEach((id) => {
 });
 ```
 
-`forEach` runs a function once for each item in an array. The `(id) => { ... }` part is an **arrow function** — a short way to write a function. For each string in `fieldIds`, the arrow function runs with `id` set to that string, and it clears that input field. This is much tidier than writing seven separate clear lines.
+`forEach` runs a function once per item in an array. The `(id) => { ... }` is an **arrow function** — a concise way to write a function inline. For each string in `fieldIds`, the function runs with `id` set to that string, clearing that input.
 
----
+Arrow functions are everywhere in modern JavaScript. The same function written three ways:
 
-## Key Concepts
-
-| Concept | What It Does | Example |
-|---|---|---|
-| `const` | Creates a variable whose value won't be replaced | `const story = \`...\`` |
-| `let` | Creates a variable whose value can change | `let count = 0;` |
-| String | A piece of text, written in quotes or backticks | `'hello'` or `` `hello` `` |
-| Template literal | A backtick string that can embed variables with `${}` | `` `Hello, ${name}!` `` |
-| `getElementById` | Finds one HTML element on the page by its `id` | `document.getElementById('name')` |
-| `.value` | Reads the current text inside an `<input>` element | `document.getElementById('verb').value` |
-| `innerHTML` | Sets the HTML content inside any element | `el.innerHTML = '<b>hi</b>'` |
-| Function call | Running a named function to do its work | `generate()`, `clearAll()` |
-
----
-
-## Try It
-
-These are things to actually do — open the file, make a change, save it, and refresh your browser to see what happens.
-
-**1. Change the story text (easy)**
-Open `mad_libs.html` in a text editor. Find the `const story = \`...\`` inside the `generate` function. Change one sentence. Maybe make the dragon's name something other than Kevin, or change where the hero lands. Save the file, refresh the browser, click Generate. See your change.
-
-**2. Add a new input field (medium)**
-Add a new input for "favorite color." In the HTML, copy one of the existing `<div class="field">` blocks, give the new input `id="color"`, and update its label and placeholder. In the JavaScript, add a new line inside `generate()`:
 ```javascript
-const color = document.getElementById('color').value.trim() || 'neon green';
-```
-Then use `${h(color)}` somewhere in the story template. Also add `'color'` to the `fieldIds` array in `clearAll()` so the Clear button wipes it too.
+// Full function declaration
+function clear(id) { document.getElementById(id).value = ''; }
 
-**3. Make highlighted words appear in a random color each time (harder)**
-Right now all highlights are yellow. Change the `h()` function to pick a random background color from a list each time it's called:
+// Function expression
+const clear = function(id) { document.getElementById(id).value = ''; };
+
+// Arrow function — most concise
+const clear = (id) => { document.getElementById(id).value = ''; };
+
+// Arrow with implicit return (for single expressions)
+const double = (n) => n * 2;
+```
+
+**Coming up:** Arrow functions appear in every subsequent chapter. In Chapter 3, `.map()`, `.filter()`, and `.forEach()` all take arrow functions. In Chapter 6, event listeners use arrow functions. By Chapter 5, you'll write them without thinking about it.
+
+---
+
+## Guided Exercises
+
+### Exercise 1: Add a New Input Field
+
+**The Challenge:** Add a "favorite color" input. It should appear in the story and be cleared by the Clear button.
+
+**Where to start:** Three things need to change: the HTML form, the JavaScript that reads values, and the story template. Which should you add first?
+
+*(Start with the HTML — you can see the change immediately. Then connect it.)*
+
+---
+
+**Step 1: Add the HTML input.**
+
+In `mad_libs.html`, find one of the existing `<div class="field">` blocks. Copy it and change the `id`, label text, and placeholder:
+
+```html
+<div class="field">
+  <label>Favorite Color</label>
+  <input type="text" id="color" placeholder="e.g. electric blue">
+</div>
+```
+
+**What do you see now?** A new input on the page. It doesn't affect the story yet.
+
+---
+
+**Step 2: Read the value in JavaScript.**
+
+Inside `generate()`, after the other `const` declarations:
+
+```javascript
+const color = document.getElementById('color').value.trim() || 'neon chartreuse';
+```
+
+**Think about it:** What does the `|| 'neon chartreuse'` do? When does it trigger?
+
+*(It provides a default when the field is empty. The empty string `''` is falsy, so `||` kicks in.)*
+
+---
+
+**Step 3: Use the color in the story.**
+
+Find the `const story = \`...\`` template. Add `${h(color)}` somewhere that makes sense:
+
+```
+Their cape was the exact shade of ${h(color)}, which everyone agreed was questionable.
+```
+
+---
+
+**Step 4: Clear it with the Clear button.**
+
+Find the `fieldIds` array. Add `'color'` to it:
+
+```javascript
+const fieldIds = ['name', 'adjective1', 'noun1', 'verb', 'place', 'adjective2', 'noun2', 'color'];
+```
+
+**Test it:** Fill in a color, generate the story, clear, generate again without filling it in. The default should appear.
+
+---
+
+### Exercise 2: Random Highlight Colors
+
+**The Challenge:** Each highlighted word gets its own random background color instead of all being yellow.
+
+**Where to start:** Look at the `h()` function. It currently produces `<span class="highlight">word</span>`. What would you change to make each call produce a different color?
+
+---
+
+**Step 1: Create a color array.**
+
 ```javascript
 const highlightColors = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fecaca', '#e9d5ff'];
+```
+
+---
+
+**Step 2: Modify `h()` to pick randomly.**
+
+```javascript
 const h = (word) => {
-  const color = pickRandom(highlightColors);
+  const color = highlightColors[Math.floor(Math.random() * highlightColors.length)];
   return `<span style="background:${color}; color:#333; font-weight:700; padding:1px 5px; border-radius:5px;">${word}</span>`;
 };
 ```
-Each highlighted word will now get its own random color.
 
-**4. Add a "Clear" button that also resets the output message (harder)**
-The existing `clearAll()` function hides the output card, but it doesn't show any confirmation. Update `clearAll()` so that after clearing the fields, it briefly shows a small message like "Fields cleared!" inside the Generate button, then restores the original text after one second:
+**What changed?** Instead of using the `.highlight` CSS class, we use an inline `style` with a randomly selected color. `Math.random()` returns a number from 0 to <1. Multiplying by `highlightColors.length` (5) gives 0–4.99. `Math.floor()` rounds down to 0, 1, 2, 3, or 4.
+
+**Test it:** Generate a story. Each highlighted word should be a different color. Generate again — different colors each time.
+
+**Think about it:** If you add more colors to `highlightColors`, does the code change? No — `highlightColors.length` adapts automatically. This is why you use array length instead of hardcoding `5`.
+
+---
+
+### Exercise 3: Calculation History → Headline History
+
+**The Challenge:** Add a "Recent Stories" section that shows the last three story summaries (the hero's name and place) below the current story.
+
+**Where to start:** You need to store history between button clicks. Where does that data live? You need a variable that persists between calls to `generate()`.
+
+*(Hint: a variable declared outside `generate()` persists across calls.)*
+
+---
+
+**Step 1: Create the history array.**
+
+At the top of the script, outside all functions:
+
 ```javascript
-const btn = document.getElementById('generateBtn');
-btn.textContent = '✓ Cleared!';
-setTimeout(() => { btn.textContent = '⚡ Generate Story!'; }, 1000);
-```
-`setTimeout` runs a function after a delay in milliseconds. 1000 milliseconds = 1 second.
-
----
-
-## Exercises
-
-### Exercise 1 — Fortune Cookie Generator
-
-Build a page with a single button labeled **"Open Fortune Cookie"**. When clicked, it picks a random fortune from an array of at least eight fortunes and displays it in a styled box. The fortune should appear with a smooth fade-in effect (use a CSS `transition` on `opacity`). Add a second button labeled **"Another Fortune"** that picks a different one. The fortunes should be funny or absurd rather than serious — think along the lines of "You will step on a LEGO at 2am" or "A small cat will judge you this week."
-
-### Exercise 2 — Compliment Machine
-
-Build a page with a text input (asking for someone's name) and a button labeled **"Compliment Them!"**. When clicked, it picks a random compliment template from an array, inserts the name into it using a template literal, and displays the result. Have at least six compliment templates. Examples: `` `${name} has the laugh of a thousand golden retrievers.` `` or `` `Scientists agree that ${name} is 40% cooler than the average human.` `` If the name field is empty, use "you" as the default. Style the output so the name appears highlighted in a color different from the compliment text.
-
-### Exercise 3 — News Headline Generator
-
-Build a page with three inputs: **Subject** (e.g. "a local squirrel"), **Verb** (e.g. "defeats"), and **Object** (e.g. "the entire government"). When the user clicks **"Generate Headline!"**, combine the three inputs into a news headline format: `BREAKING: [Subject] [Verb] [Object], Sources Say`. Display it in a large, bold, newspaper-style font. Add a **"Generate Random Headline"** button that picks random subject, verb, and object from their own arrays (at least five options each) and generates a headline without the user typing anything. Show the last five generated headlines in a list below the main display.
-
----
-
-## Solutions
-
-### Solution: Fortune Cookie Generator
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Fortune Cookie</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #f6d365, #fda085);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 20px;
-      padding: 40px;
-      max-width: 500px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-    }
-
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 8px;
-      color: #92400e;
-    }
-
-    p.sub {
-      color: #aaa;
-      margin-bottom: 32px;
-      font-size: 0.9rem;
-    }
-
-    .fortune-box {
-      background: #fffbeb;
-      border: 2px dashed #fbbf24;
-      border-radius: 14px;
-      padding: 24px;
-      min-height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 28px;
-      opacity: 0;
-      transition: opacity 0.5s ease;
-    }
-
-    .fortune-box.show {
-      opacity: 1;
-    }
-
-    .fortune-box p {
-      font-size: 1.2rem;
-      color: #78350f;
-      font-style: italic;
-      line-height: 1.6;
-    }
-
-    .btn-row {
-      display: flex;
-      gap: 12px;
-    }
-
-    button {
-      flex: 1;
-      padding: 14px;
-      border: none;
-      border-radius: 12px;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    #openBtn {
-      background: linear-gradient(135deg, #f59e0b, #ef4444);
-      color: #fff;
-    }
-
-    #anotherBtn {
-      background: #fef3c7;
-      color: #92400e;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>🥠 Fortune Cookie</h1>
-    <p class="sub">Crack one open. Wisdom awaits.</p>
-
-    <div class="fortune-box" id="fortuneBox">
-      <p id="fortuneText">Your fortune will appear here...</p>
-    </div>
-
-    <div class="btn-row">
-      <button id="openBtn" onclick="openCookie()">Open Fortune Cookie</button>
-      <button id="anotherBtn" onclick="openCookie()">Another Fortune</button>
-    </div>
-  </div>
-
-  <script>
-    const fortunes = [
-      'You will step on a LEGO at 2am. It was always going to happen.',
-      'A small cat will judge you harshly this week. This is normal.',
-      'The answer you seek is yes — unless the question involves spiders.',
-      'Great success awaits you, probably on a Tuesday.',
-      'You will find something you lost years ago. Unfortunately, it will be in the last place you look.',
-      'Someone nearby is thinking about sandwiches. That someone is you.',
-      'Your greatest adventure begins the moment you close this browser tab.',
-      'The stars say: take a nap. The stars are very smart.',
-      'Beware the man who says he is not hungry. He is always hungry.',
-      'You will receive a compliment today. You will immediately forget it.',
-    ];
-
-    let lastIndex = -1;
-
-    const openCookie = () => {
-      // Pick a random fortune that isn't the same as the last one shown.
-      let index;
-      do {
-        index = Math.floor(Math.random() * fortunes.length);
-      } while (index === lastIndex && fortunes.length > 1);
-      lastIndex = index;
-
-      // Fade out, swap text, fade back in.
-      const box = document.getElementById('fortuneBox');
-      box.classList.remove('show');
-
-      setTimeout(() => {
-        document.getElementById('fortuneText').textContent = fortunes[index];
-        box.classList.add('show');
-      }, 200);
-    };
-
-    // Show a fortune immediately on load.
-    openCookie();
-  </script>
-</body>
-</html>
+const storyHistory = [];  // stores { name, place } for each generated story
 ```
 
 ---
 
-### Solution: Compliment Machine
+**Step 2: Push to history in generate().**
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Compliment Machine</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #a8edea, #fed6e3);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
+After reading `name` and `place`, push a summary:
 
-    .card {
-      background: #fff;
-      border-radius: 20px;
-      padding: 36px;
-      max-width: 520px;
-      width: 100%;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-    }
-
-    h1 {
-      text-align: center;
-      font-size: 1.9rem;
-      color: #be185d;
-      margin-bottom: 6px;
-    }
-
-    p.sub {
-      text-align: center;
-      color: #aaa;
-      font-size: 0.9rem;
-      margin-bottom: 28px;
-    }
-
-    label {
-      display: block;
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: #555;
-      margin-bottom: 6px;
-    }
-
-    input {
-      width: 100%;
-      padding: 11px 14px;
-      border: 2px solid #f9a8d4;
-      border-radius: 10px;
-      font-size: 1rem;
-      outline: none;
-      margin-bottom: 16px;
-      transition: border-color 0.2s;
-    }
-
-    input:focus {
-      border-color: #ec4899;
-    }
-
-    button {
-      width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #ec4899, #f43f5e);
-      border: none;
-      border-radius: 12px;
-      color: #fff;
-      font-size: 1.05rem;
-      font-weight: 700;
-      cursor: pointer;
-      margin-bottom: 24px;
-    }
-
-    .result {
-      background: #fdf2f8;
-      border-radius: 14px;
-      padding: 20px 24px;
-      font-size: 1.1rem;
-      line-height: 1.7;
-      color: #374151;
-      display: none;
-    }
-
-    .result.show {
-      display: block;
-    }
-
-    .name-highlight {
-      color: #be185d;
-      font-weight: 700;
-      background: #fce7f3;
-      padding: 1px 5px;
-      border-radius: 5px;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>🌟 Compliment Machine</h1>
-    <p class="sub">Enter a name. Receive a scientifically verified compliment.</p>
-
-    <label for="personName">Someone's Name</label>
-    <input type="text" id="personName" placeholder="e.g. Jordan" />
-
-    <button onclick="compliment()">Compliment Them!</button>
-
-    <div class="result" id="result"></div>
-  </div>
-
-  <script>
-    // Each template is a function that takes a name and returns a compliment string.
-    const templates = [
-      (name) => `<span class="name-highlight">${name}</span> has the laugh of a thousand golden retrievers.`,
-      (name) => `Scientists agree that <span class="name-highlight">${name}</span> is at least 40% cooler than the average human.`,
-      (name) => `Historians will one day write long books about the outstanding snack choices of <span class="name-highlight">${name}</span>.`,
-      (name) => `<span class="name-highlight">${name}</span> could explain anything and make it sound interesting, even tax forms.`,
-      (name) => `The moon asked me to tell <span class="name-highlight">${name}</span> that it thinks they are doing great.`,
-      (name) => `Studies show that being near <span class="name-highlight">${name}</span> increases the average happiness of any room by 37%.`,
-      (name) => `<span class="name-highlight">${name}</span>'s brain is essentially a library, but cooler and it has snacks.`,
-    ];
-
-    let lastTemplateIndex = -1;
-
-    const compliment = () => {
-      const rawName = document.getElementById('personName').value.trim();
-      const name = rawName || 'you';
-
-      // Pick a template that's different from the last one used.
-      let index;
-      do {
-        index = Math.floor(Math.random() * templates.length);
-      } while (index === lastTemplateIndex && templates.length > 1);
-      lastTemplateIndex = index;
-
-      const resultEl = document.getElementById('result');
-      resultEl.innerHTML = templates[index](name);
-      resultEl.classList.add('show');
-    };
-
-    // Let the user press Enter to generate.
-    document.getElementById('personName').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') compliment();
-    });
-  </script>
-</body>
-</html>
+```javascript
+storyHistory.unshift({ name, place });
+if (storyHistory.length > 3) storyHistory.pop();  // keep only the last 3
 ```
+
+**Why `unshift` instead of `push`?** `push` adds to the end. `unshift` adds to the beginning, so newest appears first.
 
 ---
 
-### Solution: News Headline Generator
+**Step 3: Render the history.**
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>News Headline Generator</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f1f5f9;
-      min-height: 100vh;
-      padding: 24px 16px;
-    }
+After setting `innerHTML` for the story, render the history list:
 
-    .container {
-      max-width: 680px;
-      margin: 0 auto;
-    }
-
-    h1 {
-      font-size: 1.9rem;
-      color: #1e293b;
-      text-align: center;
-      margin-bottom: 4px;
-    }
-
-    p.sub {
-      text-align: center;
-      color: #94a3b8;
-      margin-bottom: 28px;
-      font-size: 0.9rem;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      margin-bottom: 20px;
-    }
-
-    .fields-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-
-    @media (max-width: 480px) {
-      .fields-row { grid-template-columns: 1fr; }
-    }
-
-    label {
-      display: block;
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: #64748b;
-      margin-bottom: 5px;
-    }
-
-    input {
-      width: 100%;
-      padding: 10px 12px;
-      border: 2px solid #e2e8f0;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    input:focus {
-      border-color: #3b82f6;
-    }
-
-    .btn-row {
-      display: flex;
-      gap: 10px;
-    }
-
-    button {
-      flex: 1;
-      padding: 13px;
-      border: none;
-      border-radius: 10px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    #customBtn {
-      background: #1e293b;
-      color: #fff;
-    }
-
-    #randomBtn {
-      background: #eff6ff;
-      color: #1d4ed8;
-    }
-
-    .headline-display {
-      background: #1e293b;
-      border-radius: 14px;
-      padding: 28px;
-      margin-bottom: 20px;
-      display: none;
-    }
-
-    .headline-display.show {
-      display: block;
-    }
-
-    .breaking {
-      font-size: 0.7rem;
-      font-weight: 900;
-      letter-spacing: 3px;
-      color: #ef4444;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-    }
-
-    .headline-text {
-      font-size: 1.5rem;
-      font-weight: 900;
-      color: #f8fafc;
-      line-height: 1.3;
-    }
-
-    .headline-text .subject { color: #93c5fd; }
-    .headline-text .verb    { color: #86efac; }
-    .headline-text .object  { color: #fca5a5; }
-
-    .source {
-      margin-top: 10px;
-      font-size: 0.8rem;
-      color: #64748b;
-      font-style: italic;
-    }
-
-    .history-card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 24px 28px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      display: none;
-    }
-
-    .history-card.show {
-      display: block;
-    }
-
-    .history-card h2 {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #94a3b8;
-      margin-bottom: 14px;
-    }
-
-    .history-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .history-list li {
-      font-size: 0.9rem;
-      color: #475569;
-      padding: 8px 12px;
-      background: #f8fafc;
-      border-radius: 8px;
-      border-left: 3px solid #3b82f6;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>📰 Headline Generator</h1>
-    <p class="sub">Breaking news. Completely made up.</p>
-
-    <div class="card">
-      <div class="fields-row">
-        <div>
-          <label for="subject">Subject</label>
-          <input type="text" id="subject" placeholder="e.g. a local squirrel" />
-        </div>
-        <div>
-          <label for="verb">Verb</label>
-          <input type="text" id="verb" placeholder="e.g. defeats" />
-        </div>
-        <div>
-          <label for="object">Object</label>
-          <input type="text" id="object" placeholder="e.g. the government" />
-        </div>
-      </div>
-      <div class="btn-row">
-        <button id="customBtn" onclick="generateCustom()">Generate Headline</button>
-        <button id="randomBtn" onclick="generateRandom()">Random Headline</button>
-      </div>
-    </div>
-
-    <div class="headline-display" id="headlineDisplay">
-      <div class="breaking">⚡ Breaking News</div>
-      <div class="headline-text" id="headlineText"></div>
-      <div class="source" id="headlineSource"></div>
-    </div>
-
-    <div class="history-card" id="historyCard">
-      <h2>Recent Headlines</h2>
-      <ul class="history-list" id="historyList"></ul>
-    </div>
-  </div>
-
-  <script>
-    const randomSubjects = [
-      'a confused pigeon',
-      'three neighborhood raccoons',
-      'an unnamed houseplant',
-      'local middle schooler',
-      'a deeply tired accountant',
-    ];
-    const randomVerbs = [
-      'outwits',
-      'legally purchases',
-      'politely disagrees with',
-      'accidentally invents',
-      'challenges to a duel',
-    ];
-    const randomObjects = [
-      'the entire financial system',
-      'a surprisingly large sandwich',
-      'the concept of Mondays',
-      'a world-famous scientist',
-      'seventeen confused tourists',
-    ];
-
-    const sources = [
-      'Sources close to the situation say they have no idea what happened.',
-      'Officials are baffled. More at 11.',
-      'No one was available for comment, which only raises further questions.',
-      'Experts describe the situation as "unprecedented and kind of funny."',
-    ];
-
-    const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-    // history stores the last five headlines as plain strings.
-    const history = [];
-
-    const showHeadline = (subject, verb, obj) => {
-      const headlineHTML = `
-        <span class="subject">${subject}</span>
-        <span class="verb"> ${verb} </span>
-        <span class="object">${obj}</span>,
-        Sources Say
-      `;
-      document.getElementById('headlineText').innerHTML = headlineHTML;
-      document.getElementById('headlineSource').textContent = pickRandom(sources);
-      document.getElementById('headlineDisplay').classList.add('show');
-
-      // Add to history (plain text version).
-      const plainHeadline = `${subject} ${verb} ${obj}, Sources Say`;
-      history.unshift(plainHeadline);
-      if (history.length > 5) history.pop();
-
-      // Render history list.
-      const listEl = document.getElementById('historyList');
-      listEl.innerHTML = '';
-      history.forEach((headline) => {
-        const li = document.createElement('li');
-        li.textContent = headline;
-        listEl.appendChild(li);
-      });
-      document.getElementById('historyCard').classList.add('show');
-    };
-
-    const generateCustom = () => {
-      const subject = document.getElementById('subject').value.trim() || pickRandom(randomSubjects);
-      const verb = document.getElementById('verb').value.trim() || pickRandom(randomVerbs);
-      const obj = document.getElementById('object').value.trim() || pickRandom(randomObjects);
-      showHeadline(subject, verb, obj);
-    };
-
-    const generateRandom = () => {
-      showHeadline(pickRandom(randomSubjects), pickRandom(randomVerbs), pickRandom(randomObjects));
-    };
-  </script>
-</body>
-</html>
+```javascript
+const historyEl = document.getElementById('story-history');
+if (historyEl) {
+  historyEl.innerHTML = storyHistory
+    .map(s => `<li>${s.name} in ${s.place}</li>`)
+    .join('');
+}
 ```
+
+Add `<ul id="story-history"></ul>` to the HTML near the output area.
+
+**What does `.map().join('')` do?** `.map()` transforms each `{ name, place }` object into a `<li>` string. `.join('')` combines the array of strings into one string.
+
+**Coming up:** This `.map().join('')` pattern for building HTML from data is used in Chapters 6, 7, and 12 to build lists, score cards, and option menus.
 
 ---
 
 ## What You Learned
 
-| Skill | Used When | Example from This Chapter |
-|---|---|---|
-| Declaring variables with `const` | Storing a value that won't be reassigned | `const story = \`...\`` |
-| Declaring variables with `let` | Storing a value that will change | `let count = 0` in a loop |
-| Building strings with template literals | Combining text and variable values | `` `Hello, ${name}!` `` |
-| Wrapping HTML in a string | Creating styled output programmatically | `\`<span class="highlight">${word}</span>\`` |
-| `document.getElementById` | Finding a specific element on the page | `document.getElementById('name')` |
-| Reading `.value` | Getting what a user typed in an input | `document.getElementById('verb').value` |
-| Writing `.innerHTML` | Displaying HTML content in an element | `el.innerHTML = story` |
-| `.classList.add` / `.remove` | Showing and hiding elements with CSS | `outputCard.classList.add('visible')` |
-| The `||` fallback operator | Providing defaults for empty inputs | `value.trim() \|\| 'default text'` |
-| `Math.random()` with `Math.floor()` | Picking a random item from an array | `arr[Math.floor(Math.random() * arr.length)]` |
-| `forEach` with arrow functions | Running the same code for each item in a list | `fieldIds.forEach((id) => { ... })` |
-
----
+| Concept | What It Does | Coming Up In |
+|---------|-------------|-------------|
+| `const` / `let` | Store data with a name | Every chapter |
+| Template literals | Build strings with `${}` interpolation | Ch6 (building HTML), Ch10 (API URLs) |
+| `document.getElementById` | Get an HTML element by ID | Ch6, Ch7 (extensively) |
+| `.value` | Read text from an `<input>` | Ch7 (calculator inputs) |
+| `.innerHTML` | Write HTML into an element | Ch6 (DOM manipulation) |
+| `classList` | Add/remove CSS classes | Ch6, Ch7, Ch9, Ch12 |
+| `\|\|` fallback | Default value when left side is falsy | Ch10 (API fallbacks), Ch12 |
+| Arrow functions | Concise inline functions | Every chapter from Ch3 on |
+| `forEach` | Run a function once per array item | Ch3, Ch5, Ch6 |
+| `Math.random()` | Generate a random number 0–<1 | Ch5 (stats), Ch9 (game), Ch11 (noise) |
 
 ## Building with Claude
 
-Once you've built and understood this project, here are four specific prompts you can paste directly into Claude to push it further. Be sure to paste your actual code along with each prompt.
-
-**Prompt 1 — Add a copy button:**
-> "I built a JavaScript Mad Libs generator. Here is the full HTML file: [paste your mad_libs.html here]. I want to add a 'Copy Story' button that appears after the story generates. When clicked, it should copy the story text (without the HTML tags, just the plain words) to the clipboard using the Clipboard API. Show me exactly where to add the HTML button and the JavaScript, and explain what `navigator.clipboard.writeText()` does."
-
-**Prompt 2 — Save inputs with localStorage:**
-> "Here is my Mad Libs generator: [paste code]. I want the values the user typed into the seven input fields to be saved automatically as they type, so if they refresh the page their inputs are still there. Use `localStorage` to do this. Add a `storage` event listener that saves each field's value when it changes. When the page loads, read back any saved values. Explain what localStorage is and why you need `JSON.stringify` only if you store objects."
-
-**Prompt 3 — Add more stories with a selector:**
-> "Here is my Mad Libs generator: [paste code]. Right now there is only one story template. I want to add two more story templates and let the user choose which one they want from a `<select>` dropdown before clicking Generate. Each story should use all seven of the same input fields but in different ways. Show me how to add the `<select>` to the HTML and how to use its `.value` in JavaScript to decide which template to use."
-
-**Prompt 4 — Animate the highlighted words:**
-> "I have this Mad Libs generator: [paste code]. When the story appears, I want each highlighted word (the ones in `.highlight` spans) to pop in one at a time with a short delay between them, rather than all appearing at once. Use CSS `@keyframes` for the pop animation and JavaScript's `querySelectorAll` and `setTimeout` to stagger the timing. Walk me through how `setTimeout` works when you use it inside a loop."
+- "I built this Mad Libs generator. Add a 'Copy Story' button that copies the plain text (no HTML tags) to the clipboard using `navigator.clipboard.writeText()`."
+- "Save the user's inputs to `localStorage` so they persist when the page is refreshed. Explain what `localStorage` is and when to use it."
+- "Add three more story templates. Let the user choose which template they want from a `<select>` dropdown before generating."
+- "Animate the highlighted words so they pop in one at a time with a staggered delay. Use CSS `@keyframes` and `setTimeout` inside a loop."
