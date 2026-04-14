@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ch12 — Build Your Own Virtual DOM</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+    header { padding: 1.5rem 2rem; border-bottom: 1px solid #1e293b; }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
+    header p  { font-size: 0.875rem; color: #64748b; margin-top: 0.25rem; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 1.5rem;
+      padding: 1.5rem 2rem;
+      max-width: 1400px;
+      min-height: calc(100vh - 72px);
+    }
+
+    /* ── Left: App Mount ── */
+    .app-panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .app-panel h2 { font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+
+    /* ── App Styles (injected into #app-mount) ── */
+    #app-mount .app { max-width: 480px; }
+
+    #app-mount .section-title {
+      font-size: 0.75rem; font-weight: 600; color: #64748b;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin: 1.25rem 0 0.75rem;
+    }
+    #app-mount .section-title:first-child { margin-top: 0; }
+
+    #app-mount .counter-row {
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    #app-mount .count-display {
+      font-size: 2.5rem; font-weight: 700; color: #f8fafc;
+      min-width: 3rem; text-align: center;
+    }
+    #app-mount button {
+      padding: 0.5rem 1rem;
+      border: 1px solid #475569;
+      background: #334155;
+      color: #e2e8f0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: background 0.1s;
+    }
+    #app-mount button:hover { background: #475569; }
+    #app-mount button.danger { border-color: #991b1b; color: #fca5a5; }
+    #app-mount button.danger:hover { background: #7f1d1d; }
+    #app-mount button.primary { border-color: #1d4ed8; background: #1e40af; color: #fff; }
+    #app-mount button.primary:hover { background: #2563eb; }
+
+    #app-mount .add-row {
+      display: flex; gap: 0.5rem; margin-bottom: 0.75rem;
+    }
+    #app-mount input[type="text"] {
+      flex: 1; padding: 0.5rem 0.75rem;
+      background: #0f172a; border: 1px solid #334155;
+      border-radius: 6px; color: #e2e8f0; font-size: 0.875rem;
+    }
+    #app-mount input[type="text"]:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+
+    #app-mount .filter-row {
+      display: flex; gap: 0.5rem; margin-bottom: 0.75rem;
+    }
+    #app-mount .filter-btn {
+      padding: 0.25rem 0.625rem; font-size: 0.75rem;
+      border: 1px solid #334155; background: transparent; color: #94a3b8;
+      border-radius: 4px; cursor: pointer;
+    }
+    #app-mount .filter-btn.active { background: #1e40af; border-color: #1d4ed8; color: #fff; }
+
+    #app-mount .todo-list { list-style: none; }
+    #app-mount .todo-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.625rem 0.75rem;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      transition: border-color 0.15s;
+    }
+    #app-mount .todo-item:hover { border-color: #334155; }
+    #app-mount .todo-item.done { opacity: 0.5; }
+    #app-mount .todo-checkbox {
+      width: 1.125rem; height: 1.125rem;
+      border: 2px solid #475569; border-radius: 4px;
+      cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; color: #22c55e;
+    }
+    #app-mount .todo-item.done .todo-checkbox { background: #166534; border-color: #166534; }
+    #app-mount .todo-text {
+      flex: 1; font-size: 0.875rem;
+    }
+    #app-mount .todo-item.done .todo-text { text-decoration: line-through; color: #64748b; }
+    #app-mount .stats {
+      font-size: 0.75rem; color: #64748b; margin-top: 0.5rem;
+    }
+
+    /* Updated node flash */
+    .flash-update { animation: flash-yellow 0.5s ease-out; }
+    .flash-add    { animation: flash-green  0.5s ease-out; }
+    .flash-remove { animation: flash-red    0.3s ease-out; }
+    @keyframes flash-yellow { 0%,100% { outline: none; } 30% { outline: 3px solid #fbbf24; } }
+    @keyframes flash-green  { 0%,100% { outline: none; } 30% { outline: 3px solid #22c55e; } }
+    @keyframes flash-red    { 0%,100% { outline: none; } 30% { outline: 3px solid #f87171; } }
+
+    /* ── Right: Inspector panels ── */
+    .right-col { display: flex; flex-direction: column; gap: 1rem; }
+
+    .panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #334155;
+      font-size: 0.75rem; font-weight: 600;
+      color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-badge {
+      background: #0f172a; border: 1px solid #334155;
+      border-radius: 9999px; padding: 0.125rem 0.5rem;
+      font-size: 0.625rem; color: #94a3b8;
+    }
+
+    /* DOM log */
+    #dom-log {
+      padding: 0.5rem;
+      max-height: 220px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.7rem;
+    }
+    #dom-log .log-entry {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 2px;
+      animation: slide-in 0.15s ease-out;
+    }
+    @keyframes slide-in { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; } }
+    .log-entry .badge {
+      font-size: 0.55rem; font-weight: 700;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      white-space: nowrap; flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .log-update  { background: rgba(251,191,36,0.08);  color: #fbbf24; }
+    .log-add     { background: rgba(34,197,94,0.08);   color: #22c55e; }
+    .log-remove  { background: rgba(248,113,113,0.08); color: #f87171; }
+    .log-replace { background: rgba(139,92,246,0.08);  color: #a78bfa; }
+    .badge-update  { background: rgba(251,191,36,0.2);  color: #fbbf24; }
+    .badge-add     { background: rgba(34,197,94,0.2);   color: #22c55e; }
+    .badge-remove  { background: rgba(248,113,113,0.2); color: #f87171; }
+    .badge-replace { background: rgba(139,92,246,0.2);  color: #a78bfa; }
+    .log-text { color: #cbd5e1; }
+    .log-empty { padding: 0.75rem; color: #475569; text-align: center; font-size: 0.75rem; }
+
+    /* VNode tree */
+    #vdom-tree {
+      padding: 0.5rem;
+      max-height: 280px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.7rem;
+    }
+    .vnode { padding: 1px 0; }
+    .vnode-tag { color: #60a5fa; }
+    .vnode-prop { color: #a78bfa; }
+    .vnode-text { color: #86efac; }
+    .vnode-indent { color: #334155; }
+
+    /* Stats bar */
+    #stats-bar {
+      display: flex; gap: 1.5rem;
+      padding: 0.75rem 1rem;
+    }
+    .stat { text-align: center; }
+    .stat-val { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
+    .stat-lbl { font-size: 0.625rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* Library source viewer */
+    #lib-source {
+      padding: 0.75rem 1rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.65rem;
+      line-height: 1.6;
+      color: #94a3b8;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre;
+    }
+    .src-kw { color: #c084fc; }
+    .src-fn { color: #60a5fa; }
+    .src-str { color: #86efac; }
+    .src-cm { color: #475569; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Chapter 12 — Build Your Own Virtual DOM</h1>
+  <p>~75 lines of library code · state → vnode tree → minimal DOM patches</p>
+</header>
+
+<div class="layout">
+
+  <!-- Left: App -->
+  <div class="app-panel">
+    <h2>Live App</h2>
+    <div id="app-mount"></div>
+  </div>
+
+  <!-- Right: Inspector -->
+  <div class="right-col">
+
+    <!-- Stats -->
+    <div class="panel">
+      <div class="panel-header">Session Stats</div>
+      <div id="stats-bar">
+        <div class="stat"><div class="stat-val" id="stat-renders">0</div><div class="stat-lbl">Renders</div></div>
+        <div class="stat"><div class="stat-val" id="stat-patches">0</div><div class="stat-lbl">Patches</div></div>
+        <div class="stat"><div class="stat-val" id="stat-dom-ops">0</div><div class="stat-lbl">DOM Ops</div></div>
+        <div class="stat"><div class="stat-val" id="stat-skipped">0</div><div class="stat-lbl">Skipped</div></div>
+      </div>
+    </div>
+
+    <!-- DOM Operations Log -->
+    <div class="panel">
+      <div class="panel-header">
+        DOM Update Log
+        <span class="panel-badge">instrumented patch()</span>
+      </div>
+      <div id="dom-log"><div class="log-empty">Interact with the app to see DOM operations…</div></div>
+    </div>
+
+    <!-- VNode Tree -->
+    <div class="panel">
+      <div class="panel-header">
+        Virtual DOM Tree
+        <span class="panel-badge">current vnode</span>
+      </div>
+      <div id="vdom-tree"><div class="log-empty">Waiting for first render…</div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: Mini Virtual DOM  (~75 lines)
+// ═══════════════════════════════════════════════════════════════════════
+
+// Create a virtual node (plain JS object)
+function h(type, props, ...children) {
+  return {
+    type,
+    props: props || {},
+    children: children.flat().map(c =>
+      (typeof c === 'string' || typeof c === 'number')
+        ? { type: '#text', props: {}, children: [], value: String(c) }
+        : c
+    ).filter(Boolean)
+  };
+}
+
+// Convert a vnode into a real DOM node
+function render(vnode) {
+  if (vnode.type === '#text') return document.createTextNode(vnode.value);
+  const el = document.createElement(vnode.type);
+  updateProps(el, vnode.props, {});
+  vnode.children.forEach(child => el.appendChild(render(child)));
+  return el;
+}
+
+// Sync props from old to new, touching only what changed
+function updateProps(el, newProps, oldProps) {
+  for (const key of Object.keys(oldProps)) {
+    if (!(key in newProps)) removeProp(el, key);
+  }
+  for (const key of Object.keys(newProps)) {
+    if (newProps[key] !== oldProps[key]) setProp(el, key, newProps[key]);
+  }
+}
+
+function setProp(el, key, value) {
+  if (key.startsWith('on') && typeof value === 'function') {
+    el[key.toLowerCase()] = value;
+  } else if (key === 'className') {
+    el.className = value;
+  } else if (key === 'style' && typeof value === 'object') {
+    Object.assign(el.style, value);
+  } else if (key !== 'key') {
+    el.setAttribute(key, value);
+  }
+}
+
+function removeProp(el, key) {
+  if (key.startsWith('on')) { el[key.toLowerCase()] = null; }
+  else if (key === 'className') { el.className = ''; }
+  else if (key !== 'key') { el.removeAttribute(key); }
+}
+
+// Reconcile: diff oldVNode vs newVNode and patch the real DOM
+function patch(parent, oldVNode, newVNode, i = 0) {
+  // --- Addition ---
+  if (!oldVNode) {
+    const el = render(newVNode);
+    parent.appendChild(el);
+    log('add', describe(newVNode), el);
+    return;
+  }
+
+  const el = parent.childNodes[i];
+
+  // --- Removal ---
+  if (!newVNode) {
+    parent.removeChild(el);
+    log('remove', describe(oldVNode), null);
+    return;
+  }
+
+  // --- Text node ---
+  if (oldVNode.type === '#text' && newVNode.type === '#text') {
+    if (oldVNode.value !== newVNode.value) {
+      el.nodeValue = newVNode.value;
+      log('update', `text "${oldVNode.value}" → "${newVNode.value}"`, el);
+    } else {
+      countSkip();
+    }
+    return;
+  }
+
+  // --- Type mismatch: replace entirely ---
+  if (oldVNode.type !== newVNode.type) {
+    const fresh = render(newVNode);
+    parent.replaceChild(fresh, el);
+    log('replace', `<${oldVNode.type}> → <${newVNode.type}>`, fresh);
+    return;
+  }
+
+  // --- Same type: update changed props, recurse into children ---
+  const changedProps = getChangedProps(oldVNode.props, newVNode.props);
+  if (changedProps.length > 0) {
+    updateProps(el, newVNode.props, oldVNode.props);
+    log('update', `<${newVNode.type}> props: ${changedProps.join(', ')}`, el);
+  } else {
+    countSkip();
+  }
+
+  reconcileChildren(el, oldVNode.children, newVNode.children);
+}
+
+function reconcileChildren(parent, oldChildren, newChildren) {
+  const maxLen = Math.max(oldChildren.length, newChildren.length);
+  let removals = 0;
+  for (let i = 0; i < maxLen; i++) {
+    patch(parent, oldChildren[i], newChildren[i], i - removals);
+    if (oldChildren[i] && !newChildren[i]) removals++;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  INSTRUMENTATION (not part of the library)
+// ═══════════════════════════════════════════════════════════════════════
+
+let totalRenders = 0, totalPatches = 0, totalDomOps = 0, totalSkipped = 0;
+
+function log(type, description, el) {
+  totalDomOps++;
+  totalPatches++;
+  updateStats();
+
+  const box = document.getElementById('dom-log');
+  const empty = box.querySelector('.log-empty');
+  if (empty) empty.remove();
+
+  if (box.children.length > 60) box.removeChild(box.firstChild);
+
+  const entry = document.createElement('div');
+  entry.className = `log-entry log-${type}`;
+  entry.innerHTML = `<span class="badge badge-${type}">${type.toUpperCase()}</span><span class="log-text">${escLog(description)}</span>`;
+  box.appendChild(entry);
+  box.scrollTop = box.scrollHeight;
+
+  if (el && el.nodeType === 1) {
+    el.classList.add(`flash-${type === 'replace' ? 'add' : type}`);
+    setTimeout(() => el.classList.remove(`flash-${type === 'replace' ? 'add' : type}`), 600);
+  }
+}
+
+function countSkip() {
+  totalSkipped++;
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('stat-renders').textContent = totalRenders;
+  document.getElementById('stat-patches').textContent = totalPatches;
+  document.getElementById('stat-dom-ops').textContent = totalDomOps;
+  document.getElementById('stat-skipped').textContent = totalSkipped;
+}
+
+function getChangedProps(oldProps, newProps) {
+  const keys = new Set([...Object.keys(oldProps), ...Object.keys(newProps)]);
+  const changed = [];
+  for (const k of keys) {
+    if (oldProps[k] !== newProps[k] && k !== 'key') changed.push(k);
+  }
+  return changed;
+}
+
+function describe(vnode) {
+  if (!vnode) return 'null';
+  if (vnode.type === '#text') return `"${vnode.value}"`;
+  return `<${vnode.type}${vnode.props.className ? '.' + vnode.props.className.split(' ')[0] : ''}>`;
+}
+
+function escLog(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// VNode tree renderer (for inspector panel)
+function renderVNodeTree(vnode, indent = 0) {
+  if (!vnode) return '';
+  const pad = '  '.repeat(indent);
+  if (vnode.type === '#text') {
+    return `<div class="vnode"><span class="vnode-indent">${pad}</span><span class="vnode-text">"${escLog(vnode.value)}"</span></div>`;
+  }
+  const props = Object.entries(vnode.props)
+    .filter(([k]) => !k.startsWith('on') && k !== 'key')
+    .map(([k, v]) => `<span class="vnode-prop"> ${k}="${escLog(String(v))}"</span>`)
+    .join('');
+  const children = vnode.children.map(c => renderVNodeTree(c, indent + 1)).join('');
+  if (!children) {
+    return `<div class="vnode"><span class="vnode-indent">${pad}</span><span class="vnode-tag">&lt;${vnode.type}${props} /&gt;</span></div>`;
+  }
+  return `<div class="vnode"><span class="vnode-indent">${pad}</span><span class="vnode-tag">&lt;${vnode.type}${props}&gt;</span></div>${children}<div class="vnode"><span class="vnode-indent">${pad}</span><span class="vnode-tag">&lt;/${vnode.type}&gt;</span></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  THE APP
+// ═══════════════════════════════════════════════════════════════════════
+
+let state = {
+  todos: [
+    { id: 1, text: 'Learn virtual DOM', done: true },
+    { id: 2, text: 'Build a reconciler', done: false },
+    { id: 3, text: 'Ship something cool', done: false },
+  ],
+  count: 0,
+  filter: 'all',   // 'all' | 'active' | 'done'
+  inputText: '',
+  nextId: 4,
+};
+
+// Immutable state update → re-render
+function setState(updater) {
+  state = typeof updater === 'function' ? updater(state) : { ...state, ...updater };
+  update();
+}
+
+// Pure view function: state → vnode tree
+function view(s) {
+  const visible = s.todos.filter(t =>
+    s.filter === 'all'    ? true :
+    s.filter === 'active' ? !t.done :
+    /* done */              t.done
+  );
+  const doneCount   = s.todos.filter(t => t.done).length;
+  const activeCount = s.todos.length - doneCount;
+
+  return h('div', { className: 'app' },
+    // ── Counter ──────────────────────────────────────────────────
+    h('div', { className: 'section-title' }, 'Counter'),
+    h('div', { className: 'counter-row' },
+      h('button', { onClick: () => setState(s => ({ ...s, count: s.count - 1 })) }, '−'),
+      h('div', { className: 'count-display' }, String(s.count)),
+      h('button', { onClick: () => setState(s => ({ ...s, count: s.count + 1 })) }, '+'),
+      h('button', {
+        onClick: () => setState(s => ({ ...s, count: 0 })),
+        className: 'danger',
+        style: { marginLeft: '0.5rem', fontSize: '0.75rem' }
+      }, 'Reset'),
+    ),
+
+    // ── Todos ─────────────────────────────────────────────────────
+    h('div', { className: 'section-title', style: { marginTop: '1.5rem' } }, 'Todos'),
+
+    // Add row
+    h('div', { className: 'add-row' },
+      h('input', {
+        type: 'text',
+        placeholder: 'Add a todo…',
+        value: s.inputText,
+        onInput: e => setState(s => ({ ...s, inputText: e.target.value })),
+        onKeydown: e => {
+          if (e.key === 'Enter' && s.inputText.trim()) addTodo();
+        },
+      }),
+      h('button', { className: 'primary', onClick: addTodo }, 'Add'),
+    ),
+
+    // Filter row
+    h('div', { className: 'filter-row' },
+      ...['all', 'active', 'done'].map(f =>
+        h('button', {
+          className: 'filter-btn' + (s.filter === f ? ' active' : ''),
+          onClick: () => setState(s => ({ ...s, filter: f })),
+        }, f)
+      )
+    ),
+
+    // Todo list
+    h('ul', { className: 'todo-list' },
+      ...visible.map(todo =>
+        h('li', { className: 'todo-item' + (todo.done ? ' done' : ''), key: String(todo.id) },
+          h('div', {
+            className: 'todo-checkbox',
+            onClick: () => toggleTodo(todo.id),
+          }, todo.done ? '✓' : ''),
+          h('span', { className: 'todo-text' }, todo.text),
+          h('button', {
+            className: 'danger',
+            style: { fontSize: '0.7rem', padding: '0.2rem 0.5rem' },
+            onClick: () => removeTodo(todo.id),
+          }, '✕'),
+        )
+      ),
+      visible.length === 0
+        ? h('li', { style: { color: '#475569', fontSize: '0.875rem', padding: '0.5rem' } }, 'No todos here.')
+        : null
+    ),
+
+    // Stats
+    h('div', { className: 'stats' },
+      `${activeCount} item${activeCount !== 1 ? 's' : ''} left · ${doneCount} done`
+    ),
+  );
+}
+
+function addTodo() {
+  if (!state.inputText.trim()) return;
+  setState(s => ({
+    ...s,
+    todos: [...s.todos, { id: s.nextId, text: s.inputText.trim(), done: false }],
+    inputText: '',
+    nextId: s.nextId + 1,
+  }));
+}
+
+function toggleTodo(id) {
+  setState(s => ({
+    ...s,
+    todos: s.todos.map(t => t.id === id ? { ...t, done: !t.done } : t),
+  }));
+}
+
+function removeTodo(id) {
+  setState(s => ({ ...s, todos: s.todos.filter(t => t.id !== id) }));
+}
+
+// ── App loop ──────────────────────────────────────────────────────────
+
+let currentVNode = null;
+const mountPoint = document.getElementById('app-mount');
+
+function update() {
+  totalRenders++;
+  const newVNode = view(state);
+
+  if (!currentVNode) {
+    // First render: no diffing, just render to DOM
+    mountPoint.appendChild(render(newVNode));
+  } else {
+    // Re-render: patch only what changed
+    patch(mountPoint, currentVNode, newVNode, 0);
+  }
+
+  currentVNode = newVNode;
+
+  // Update vnode inspector
+  const treeEl = document.getElementById('vdom-tree');
+  const empty = treeEl.querySelector('.log-empty');
+  if (empty) empty.remove();
+  treeEl.innerHTML = renderVNodeTree(newVNode);
+
+  updateStats();
+}
+
+// First render
+update();
+</script>
+</body>
+</html>

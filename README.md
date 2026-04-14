@@ -1,87 +1,88 @@
 # JavaScript: The Kernighan Way
 
-**Learn JavaScript by Building Real Programs**
+**Learn JavaScript by building real programs — then building the tools that built them.**
 
 ---
 
-## Your Mission, Should You Choose to Accept It
+## The Approach
 
-Brian Kernighan taught a generation of programmers with a simple idea: *you learn to program by writing programs*. Not by memorizing syntax tables. Not by reading about theory. You learn by building something real, breaking it, fixing it, and making it your own.
+Brian Kernighan taught a generation of programmers with a simple idea: *you learn to program by writing programs*. Not by memorizing syntax. Not by reading theory. You learn by building something real, understanding why it works, and making it your own.
 
-This book takes that idea and turns it into **12 missions**.
+This book takes that idea through two phases:
 
-Each mission drops you into a scenario: a broken machine at the school fair, a dungeon that needs a map, a spy agency that needs a password generator. Your job is to write the code that saves the day. Along the way, you'll learn every major concept in JavaScript — not because a textbook says so, but because your mission demands it.
+**Chapters 1–4: The Language** — fundamental JavaScript through small, complete programs. Variables, decisions, loops, functions. The bedrock.
 
-No concept is introduced "for completeness." If it's in this book, it's because a real program needed it to work.
+**Chapters 5–12: Build Your Own X** — each chapter builds a real library from scratch. Lodash. jQuery. A test framework. A template engine. Promises. A router. Redux. A virtual DOM. You use these tools every day; now you'll understand exactly how they work at the machine level.
 
-## How Missions Work
+The premise of chapters 5–12: the best way to understand a tool is to build it yourself. A router is a regex matcher and a `history.pushState` wrapper. Redux is a closure with a pub/sub system. A virtual DOM is a JavaScript object comparer that calls `setAttribute`. These aren't magic — they're patterns, and once you see the pattern, you can build anything.
 
-Every chapter is a **mission** with this structure:
+## How Chapters Work
 
-1. **Mission Briefing** — The story. What's broken, what's at stake, why YOU need to fix it.
-2. **Starter Code** — A partially working program with `// TODO` comments showing what you need to build. Not blank. Not complete. Just enough to get you going.
-3. **Challenges** — 3–5 progressive steps that build toward the complete program. Each one gets you closer to mission success.
-4. **Hints** — Stuck? Every challenge has three levels of help:
-   - 🤔 **Think About It** — A guiding question
-   - 💡 **Hint** — A more specific nudge
-   - 🔓 **Solution** — The complete code
-5. **The Complete Program** — What the finished mission looks like (also the standalone `.html` file in the folder).
-6. **Bonus Missions** — Extra challenges for agents who want more.
-7. **What You Unlocked** — Skills and abilities you've gained, like leveling up in a game.
-8. **Building with Claude** — Prompts to extend your program with AI.
+Every chapter follows the same structure:
+
+1. **Intro paragraph** — the concept and why you're building it
+2. **The Problem** — what you're solving and why the naive approach fails
+3. **The Complete Program** — the library in full, readable in one sitting
+4. **Walkthrough** — concept by concept, with code and explanation
+5. **Try It** — 4 quick extensions to attempt before the exercises
+6. **Exercises** — 5 progressively harder problems that deepen the concept
+7. **Solutions** — complete working code for every exercise
+8. **What You Learned** — a summary table of every key concept
+9. **Building with Claude** — a bad prompt and a good prompt, to show how to get real help from an AI assistant
 
 ## What You Need
 
 Two things:
 
-1. **A web browser** — Chrome, Firefox, Safari, Edge. You already have one.
-2. **A text editor** — [VS Code](https://code.visualstudio.com/) is free and excellent. Notepad works too.
+1. **A web browser** — Chrome, Firefox, Safari, or Edge. You already have one.
+2. **A text editor** — [VS Code](https://code.visualstudio.com/) is free and excellent.
 
-That's it. No installing Node. No package managers. No terminal commands. Every program is a single HTML file you double-click to run.
+No Node. No package managers. No terminal. Every program is a single `.html` file you open in a browser.
 
-## Mission Log (Table of Contents)
+## Table of Contents
 
-| Mission | Codename | You Build | Skills You Unlock |
-|---------|----------|-----------|-------------------|
-| 1 | [Hello, Browser](chapters/01_hello_browser/) | Mad Libs generator | Variables, strings, template literals, basic DOM |
-| 2 | [Decisions](chapters/02_decisions/) | Choose Your Adventure story engine | if/else, comparisons, logical operators, switch |
+### Part 1: The Language
+
+| Chapter | Title | You Build | Concepts |
+|---------|-------|-----------|----------|
+| 1 | [Hello, Browser](chapters/01_hello_browser/) | Mad Libs generator | Variables, strings, template literals, DOM |
+| 2 | [Decisions](chapters/02_decisions/) | Choose Your Adventure engine | if/else, comparisons, logical operators, switch |
 | 3 | [Loops and Arrays](chapters/03_loops_and_arrays/) | Quiz game with scoring | Arrays, for loops, .map/.filter/.forEach |
-| 4 | [Functions](chapters/04_functions/) | Password generator with strength meter | Functions, arrow functions, parameters, scope |
-| 5 | Objects | Creature card builder | Object literals, properties, methods, this |
-| 6 | The DOM | Dynamic to-do list | querySelector, createElement, event delegation |
-| 7 | Events and Forms | Calculator app | Event listeners, form validation, keyboard events |
-| 8 | Canvas and Drawing | Drawing app | Canvas API, mouse tracking, color and stroke |
-| 9 | Animation and Games | Breakout clone | requestAnimationFrame, collision detection, game loops |
-| 10 | Async and APIs | Weather dashboard | fetch, promises, async/await, JSON |
-| 11 | Sound and Media | Drum machine | Web Audio API, media elements, timing |
-| 12 | The Final Project | Multiplayer quiz game | WebSockets, modules, putting it all together |
+| 4 | [Functions](chapters/04_functions/) | Password generator | Functions, arrow functions, parameters, scope |
+
+### Part 2: Build Your Own X
+
+| Chapter | Title | You Build | Key Concepts |
+|---------|-------|-----------|--------------|
+| 5 | [Build Your Own Lodash](chapters/05_lodash/) | Utility library with 20+ functions | Higher-order functions, closures, function composition |
+| 6 | [Build Your Own jQuery](chapters/06_jquery/) | DOM wrapper with method chaining | Wrapper pattern, `return this`, event delegation |
+| 7 | [Build Your Own Test Framework](chapters/07_test_framework/) | Mocha/Jest-style test runner | Collect-then-run, try/catch as pass/fail, matchers |
+| 8 | [Build Your Own Template Engine](chapters/08_templating/) | Mustache-style compiler | Tokenizer, code generation, `new Function` |
+| 9 | [Build Your Own Promise](chapters/09_promise/) | Promises/A+ state machine | State machine, microtask queue, thenable resolution |
+| 10 | [Build Your Own Router](chapters/10_router/) | Client-side SPA router | `history.pushState`, RegExp named groups, `URLSearchParams` |
+| 11 | [Build Your Own Redux](chapters/11_redux/) | Predictable state container | Pure reducers, pub/sub, middleware currying |
+| 12 | [Build Your Own Virtual DOM](chapters/12_virtual_dom/) | React-style reconciler | vnode diffing, minimal DOM patching, reconciliation |
 
 ## Code Conventions
 
-All code uses **modern JavaScript (ES2024+)**:
+All code uses **modern JavaScript (ES2022+)**:
 
 - `const` and `let` — never `var`
-- Arrow functions `() => {}` where they make code clearer
-- Template literals `` `Hello, ${name}!` `` instead of string concatenation
-- Destructuring, spread operators, and optional chaining where they simplify code
-- `for...of` loops for clean iteration
-- Semantic HTML5 elements
-- CSS custom properties for theming
+- Arrow functions, template literals, destructuring, spread operators
+- `for...of` for clean iteration
+- Named capture groups in RegExp: `(?<id>[^/]+)`
+- `Map`, `Set`, `WeakMap` where they're the right tool
+- `queueMicrotask`, `URLSearchParams`, `URLPattern` — platform builtins over polyfills
 
-Every program is a **single HTML file** with embedded `<style>` and `<script>` tags. This isn't how professional apps are built, but it's the fastest way to go from zero to a working program. By Mission 12, you'll understand why professionals split things up — and you'll be ready to do it yourself.
+Every program is a **single HTML file** with embedded `<style>` and `<script>` tags. Not how production apps are structured — but the fastest path from an idea to a running program, with nothing between you and the JavaScript.
 
 ## Building with Claude
 
-Every mission ends with a **"Building with Claude"** section — prompts you can paste into [Claude](https://claude.ai) to take your program further. Claude is an AI assistant that's great at helping you code.
+Every chapter ends with a **"Building with Claude"** section showing two prompts: a bad one and a good one. The difference is specificity.
 
-Here's how to get the most out of it:
+The bad prompt asks a general question. The good prompt describes the specific system you built, proposes a solution, and asks a pointed question about the hardest part. That level of specificity is what gets you past "here's an overview" and into a real technical conversation.
 
-- **Show your code.** Paste your current program and say "I built this. Now I want to add [feature]."
-- **Ask why, not just how.** "Why does this use `const` instead of `let`?" teaches you more than "Make this work."
-- **Debug together.** Paste an error message and your code. Claude will explain what went wrong.
-- **Go beyond the missions.** The prompts are starting points. Follow your curiosity.
-
-The goal isn't to have Claude write code for you — it's to have a patient partner who can answer your questions at 2 AM when no teacher is around.
+General rule: the more precisely you can describe what you already built and what specifically isn't working, the better the answer.
 
 ## Getting Started
 
@@ -90,7 +91,7 @@ git clone https://github.com/yos17/javascript-the-kernighan-way.git
 cd javascript-the-kernighan-way
 ```
 
-Open `chapters/01_hello_browser/starter.html` in your text editor. Read the mission briefing. Start coding. Good luck, agent.
+Open `chapters/01_hello_browser/` and read the README. Open the `.html` file in your browser. Start there and work forward. By chapter 12, you'll have built the core of a modern UI framework from scratch.
 
 ---
 
