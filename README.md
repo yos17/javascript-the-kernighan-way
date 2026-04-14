@@ -10,7 +10,7 @@ Brian Kernighan taught a generation of programmers with a simple idea: *you lear
 
 This book takes that idea through two phases:
 
-**Chapters 1–4: The Language** — fundamental JavaScript through small, complete programs. Variables, decisions, loops, functions. The bedrock.
+**Chapters 1–4: The Language** — fundamental JavaScript through building real tools. Types and strings, control flow, arrays and loops, functions. Each chapter builds a working library from scratch.
 
 **Chapters 5–12: Build Your Own X** — each chapter builds a real library from scratch. Lodash. jQuery. A test framework. A template engine. Promises. A router. Redux. A virtual DOM. You use these tools every day; now you'll understand exactly how they work at the machine level.
 
@@ -45,10 +45,10 @@ No Node. No package managers. No terminal. Every program is a single `.html` fil
 
 | Chapter | Title | You Build | Concepts |
 |---------|-------|-----------|----------|
-| 1 | [Hello, Browser](chapters/01_hello_browser/) | Mad Libs generator | Variables, strings, template literals, DOM |
-| 2 | [Decisions](chapters/02_decisions/) | Choose Your Adventure engine | if/else, comparisons, logical operators, switch |
-| 3 | [Loops and Arrays](chapters/03_loops_and_arrays/) | Quiz game with scoring | Arrays, for loops, .map/.filter/.forEach |
-| 4 | [Functions](chapters/04_functions/) | Password generator | Functions, arrow functions, parameters, scope |
+| 1 | [Build Your Own Logger](chapters/01_logger/) | Structured logger with levels, timestamps, type display | Types, `typeof`, template literals, string methods, factory functions |
+| 2 | [Build Your Own Validator](chapters/02_validator/) | Schema-driven form validator with real-time feedback | if/else, comparisons, logical operators, truthy/falsy, objects |
+| 3 | [Build Your Own Array Methods](chapters/03_array_methods/) | map, filter, reduce, find, every, some from scratch | Arrays, for loops, callbacks, higher-order functions |
+| 4 | [Build Your Own Calculator](chapters/04_calculator/) | Expression parser and evaluator (REPL) | Functions, scope, closures, recursion, try/catch, switch |
 
 ### Part 2: Build Your Own X
 

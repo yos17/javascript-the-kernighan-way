@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Build Your Own Validator — Chapter 2</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #c9d1d9;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 { color: #58a6ff; font-size: 1.3em; margin-bottom: 4px; }
+    .subtitle { color: #484f58; font-size: 0.85em; margin-bottom: 28px; }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 900px; }
+    @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .panel h2 { font-size: 0.9em; color: #8b949e; margin-bottom: 16px;
+      text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: 0.82em; color: #8b949e; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      background: #0d1117; color: #c9d1d9;
+      border: 1px solid #30363d;
+      padding: 8px 12px; border-radius: 6px;
+      font-size: 0.9em; font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    input:focus { outline: none; border-color: #58a6ff; }
+    input.valid   { border-color: #3fb950; }
+    input.invalid { border-color: #f85149; }
+
+    .rules { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+    .rule {
+      font-size: 0.76em; display: flex; align-items: center; gap: 6px;
+      color: #484f58; transition: color 0.2s;
+    }
+    .rule.pass { color: #3fb950; }
+    .rule.fail { color: #f85149; }
+    .rule .icon { font-size: 0.9em; width: 12px; }
+
+    .submit-btn {
+      width: 100%; padding: 10px;
+      background: #1f6feb; color: #fff;
+      border: none; border-radius: 6px;
+      font-size: 0.9em; cursor: pointer;
+      font-family: inherit; margin-top: 8px;
+      transition: background 0.2s;
+    }
+    .submit-btn:hover { background: #388bfd; }
+    .submit-btn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+    /* Result panel */
+    .result { margin-top: 20px; }
+    .result-block {
+      background: #0d1117; border: 1px solid #21262d;
+      border-radius: 6px; padding: 12px;
+      font-family: 'Courier New', monospace; font-size: 0.78em;
+      color: #8b949e; white-space: pre-wrap; word-break: break-all;
+      min-height: 60px;
+    }
+    .result-block .ok  { color: #3fb950; }
+    .result-block .err { color: #f85149; }
+
+    /* Validator inspector panel */
+    .inspector { margin-top: 20px; }
+    .inspect-row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid #21262d;
+      font-size: 0.82em; align-items: flex-start;
+    }
+    .inspect-row:last-child { border-bottom: none; }
+    .inspect-field { color: #8b949e; font-family: monospace; }
+    .inspect-status { font-weight: bold; font-size: 0.9em; }
+    .inspect-status.pass { color: #3fb950; }
+    .inspect-status.fail { color: #f85149; }
+    .inspect-errors { color: #f85149; font-size: 0.78em; max-width: 200px; text-align: right; }
+  </style>
+</head>
+<body>
+  <h1>Build Your Own Validator</h1>
+  <p class="subtitle">Chapter 2 — if/else, comparisons, logical operators, objects as rule sets</p>
+
+  <div class="layout">
+    <!-- Left: the form -->
+    <div class="panel">
+      <h2>Sign-Up Form</h2>
+
+      <div class="field">
+        <label>Username</label>
+        <input id="username" type="text" placeholder="3–20 chars, letters/numbers only"
+               oninput="validateField('username', this.value)" />
+        <div class="rules" id="rules-username"></div>
+      </div>
+
+      <div class="field">
+        <label>Email</label>
+        <input id="email" type="text" placeholder="user@example.com"
+               oninput="validateField('email', this.value)" />
+        <div class="rules" id="rules-email"></div>
+      </div>
+
+      <div class="field">
+        <label>Age</label>
+        <input id="age" type="text" placeholder="13–120"
+               oninput="validateField('age', this.value)" />
+        <div class="rules" id="rules-age"></div>
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input id="password" type="password" placeholder="8+ chars, uppercase, number"
+               oninput="validateField('password', this.value)" />
+        <div class="rules" id="rules-password"></div>
+      </div>
+
+      <button class="submit-btn" id="submitBtn" onclick="handleSubmit()" disabled>
+        Create Account
+      </button>
+    </div>
+
+    <!-- Right: validator output -->
+    <div class="panel">
+      <h2>Validator Output</h2>
+      <div class="inspector" id="inspector">
+        <div style="color:#484f58; font-size:0.85em; padding:20px 0; text-align:center">
+          Start typing to see validation results
+        </div>
+      </div>
+
+      <h2 style="margin-top:20px">validate() return value</h2>
+      <div class="result-block" id="resultBlock">// result appears here</div>
+    </div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: miniValidator
+//
+//  validate(value, rules) takes a value and an object of rules.
+//  It returns { valid: boolean, errors: string[] }.
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ─── The rule checkers ────────────────────────────────────────────────
+//
+// Each checker is a function: (value, param) → error message or null.
+// null means "this rule passed".
+// A string means "this rule failed, here's why".
+
+const RULES = {
+
+  required: function(value) {
+    // A value is "present" if it's not null, not undefined, and not empty string.
+    // The ! operator turns truthy/falsy into a boolean.
+    if (value === null || value === undefined || value === '') {
+      return 'This field is required';
+    }
+    return null;   // null = pass
+  },
+
+  minLength: function(value, min) {
+    // String(value) makes sure we can call .length even on a number.
+    if (String(value).length < min) {
+      return `Must be at least ${min} characters`;
+    }
+    return null;
+  },
+
+  maxLength: function(value, max) {
+    if (String(value).length > max) {
+      return `Must be no more than ${max} characters`;
+    }
+    return null;
+  },
+
+  isNumber: function(value) {
+    // Number() converts a string like "42" to the number 42.
+    // If the string isn't a valid number, Number() returns NaN.
+    // isNaN() tells us if a value is NaN.
+    if (value === '' || value === null || value === undefined) return null; // let required handle empty
+    if (isNaN(Number(value))) {
+      return 'Must be a number';
+    }
+    return null;
+  },
+
+  min: function(value, minimum) {
+    if (value === '' || value === null || value === undefined) return null;
+    if (Number(value) < minimum) {
+      return `Must be at least ${minimum}`;
+    }
+    return null;
+  },
+
+  max: function(value, maximum) {
+    if (value === '' || value === null || value === undefined) return null;
+    if (Number(value) > maximum) {
+      return `Must be no more than ${maximum}`;
+    }
+    return null;
+  },
+
+  pattern: function(value, regex) {
+    // regex.test(value) returns true if the pattern matches
+    if (value === '' || value === null || value === undefined) return null;
+    if (!regex.test(String(value))) {
+      return 'Invalid format';
+    }
+    return null;
+  },
+
+  isEmail: function(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    // A very simple email check: must contain exactly one @, and at least one . after it
+    const atIndex = String(value).indexOf('@');
+    if (atIndex < 1) return 'Must contain @';
+    const afterAt = String(value).slice(atIndex + 1);
+    if (!afterAt.includes('.') || afterAt.startsWith('.') || afterAt.endsWith('.')) {
+      return 'Must have a valid domain (e.g. example.com)';
+    }
+    return null;
+  },
+
+  hasUppercase: function(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    // /[A-Z]/ is a regular expression pattern — matches any uppercase letter
+    if (!/[A-Z]/.test(String(value))) {
+      return 'Must contain at least one uppercase letter';
+    }
+    return null;
+  },
+
+  hasNumber: function(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    if (!/[0-9]/.test(String(value))) {
+      return 'Must contain at least one number';
+    }
+    return null;
+  },
+
+  alphanumeric: function(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    // /^[a-zA-Z0-9]+$/ means: only letters and numbers from start (^) to end ($)
+    if (!/^[a-zA-Z0-9]+$/.test(String(value))) {
+      return 'Only letters and numbers allowed';
+    }
+    return null;
+  }
+
+};
+
+
+// ─── The core validate() function ────────────────────────────────────
+//
+// validate(value, schema) applies every rule in the schema and collects errors.
+// schema looks like: { required: true, minLength: 3, maxLength: 20 }
+//
+// Returns: { valid: boolean, errors: string[], ruleResults: object }
+
+function validate(value, schema) {
+  const errors = [];
+  const ruleResults = {};   // tracks pass/fail per rule — used by the UI
+
+  // Object.entries(schema) gives us an array of [key, param] pairs.
+  // For { required: true, minLength: 3 }, it gives:
+  //   [ ['required', true], ['minLength', 3] ]
+  for (const [ruleName, param] of Object.entries(schema)) {
+    const checker = RULES[ruleName];
+
+    if (!checker) {
+      // Unknown rule — skip silently (you could throw here in strict mode)
+      continue;
+    }
+
+    // Run the checker. Pass `param` as the second argument.
+    // For `required: true`, param is `true` — the checker ignores it.
+    // For `minLength: 3`, param is 3 — the checker uses it.
+    const error = checker(value, param);
+
+    if (error !== null) {
+      errors.push(error);             // rule failed
+      ruleResults[ruleName] = { pass: false, message: error };
+    } else {
+      ruleResults[ruleName] = { pass: true };  // rule passed
+    }
+  }
+
+  return {
+    valid:       errors.length === 0,  // true only if zero errors
+    errors,
+    ruleResults
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SCHEMA: what each field must look like
+// ═══════════════════════════════════════════════════════════════════════
+
+const SCHEMA = {
+  username: {
+    required:     true,
+    minLength:    3,
+    maxLength:    20,
+    alphanumeric: true
+  },
+  email: {
+    required: true,
+    isEmail:  true
+  },
+  age: {
+    required: true,
+    isNumber: true,
+    min:      13,
+    max:      120
+  },
+  password: {
+    required:     true,
+    minLength:    8,
+    hasUppercase: true,
+    hasNumber:    true
+  }
+};
+
+// Human-readable labels for each rule (used in the UI rule list)
+const RULE_LABELS = {
+  required:     'Required',
+  minLength:    (p) => `At least ${p} characters`,
+  maxLength:    (p) => `No more than ${p} characters`,
+  isNumber:     'Must be a number',
+  min:          (p) => `At least ${p}`,
+  max:          (p) => `No more than ${p}`,
+  isEmail:      'Valid email address',
+  hasUppercase: 'Contains uppercase letter',
+  hasNumber:    'Contains a number',
+  alphanumeric: 'Letters and numbers only',
+  pattern:      'Matches required format'
+};
+
+function getRuleLabel(name, param) {
+  const label = RULE_LABELS[name];
+  if (!label) return name;
+  return typeof label === 'function' ? label(param) : label;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  APPLICATION: connect validator to the UI
+// ═══════════════════════════════════════════════════════════════════════
+
+// Track current validation state for each field
+const fieldState = { username: null, email: null, age: null, password: null };
+
+function validateField(fieldName, value) {
+  const schema = SCHEMA[fieldName];
+  const result = validate(value, schema);
+
+  fieldState[fieldName] = result;
+
+  // Update the input border color
+  const input = document.getElementById(fieldName);
+  if (value === '') {
+    input.className = '';
+  } else {
+    input.className = result.valid ? 'valid' : 'invalid';
+  }
+
+  // Render the rule list (check/cross per rule)
+  renderRules(fieldName, schema, result.ruleResults, value);
+
+  // Update the inspector panel
+  renderInspector();
+
+  // Update the submit button
+  updateSubmitButton();
+}
+
+function renderRules(fieldName, schema, ruleResults, value) {
+  const container = document.getElementById(`rules-${fieldName}`);
+  container.innerHTML = '';
+
+  if (value === '') return;   // don't show rules on empty input
+
+  for (const [ruleName, param] of Object.entries(schema)) {
+    const res   = ruleResults[ruleName];
+    const pass  = res && res.pass;
+    const label = getRuleLabel(ruleName, param);
+
+    const div = document.createElement('div');
+    div.className = `rule ${pass ? 'pass' : 'fail'}`;
+    div.innerHTML = `<span class="icon">${pass ? '✓' : '✗'}</span><span>${label}</span>`;
+    container.appendChild(div);
+  }
+}
+
+function renderInspector() {
+  const inspector = document.getElementById('inspector');
+  const resultBlock = document.getElementById('resultBlock');
+  const fields = Object.keys(fieldState);
+
+  // Show inspector rows for fields that have been touched
+  const touched = fields.filter(f => fieldState[f] !== null);
+  if (touched.length === 0) return;
+
+  inspector.innerHTML = '';
+
+  for (const field of touched) {
+    const result = fieldState[field];
+    const row = document.createElement('div');
+    row.className = 'inspect-row';
+
+    const errList = result.errors.length > 0
+      ? result.errors.join('<br>')
+      : '';
+
+    row.innerHTML = `
+      <span class="inspect-field">${field}</span>
+      <div style="text-align:right">
+        <span class="inspect-status ${result.valid ? 'pass' : 'fail'}">
+          ${result.valid ? 'PASS' : 'FAIL'}
+        </span>
+        ${errList ? `<div class="inspect-errors">${errList}</div>` : ''}
+      </div>
+    `;
+    inspector.appendChild(row);
+  }
+
+  // Show the return value of the last touched field
+  const last = touched[touched.length - 1];
+  const res  = fieldState[last];
+  const json = JSON.stringify({ valid: res.valid, errors: res.errors }, null, 2);
+  resultBlock.innerHTML = json
+    .replace(/"valid": true/g,  '"valid": <span class="ok">true</span>')
+    .replace(/"valid": false/g, '"valid": <span class="err">false</span>');
+}
+
+function updateSubmitButton() {
+  const btn = document.getElementById('submitBtn');
+  const allValid = Object.values(fieldState).every(r => r !== null && r.valid);
+  btn.disabled = !allValid;
+}
+
+function handleSubmit() {
+  // Run a final validation on all fields at once
+  const values = {};
+  for (const field of Object.keys(SCHEMA)) {
+    values[field] = document.getElementById(field).value;
+  }
+
+  let allValid = true;
+  for (const [field, schema] of Object.entries(SCHEMA)) {
+    const result = validate(values[field], schema);
+    if (!result.valid) allValid = false;
+  }
+
+  if (allValid) {
+    const resultBlock = document.getElementById('resultBlock');
+    resultBlock.innerHTML = '<span class="ok">✓ Form submitted successfully!\n\n' +
+      JSON.stringify(values, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+  }
+}
+</script>
+</body>
+</html>

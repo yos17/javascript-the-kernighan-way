@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Build Your Own Logger — Chapter 1</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d0d1a;
+      color: #c8c8d8;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 { color: #a8d8ea; font-size: 1.3em; margin-bottom: 4px; }
+    .subtitle { color: #555; font-size: 0.85em; margin-bottom: 28px; }
+
+    .controls {
+      display: flex; gap: 10px; margin-bottom: 14px;
+      flex-wrap: wrap; align-items: flex-end;
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { color: #666; font-size: 0.75em; }
+    select, input, button {
+      background: #16213e; color: #c8c8d8;
+      border: 1px solid #2a2a4a;
+      padding: 7px 11px; border-radius: 4px;
+      font-family: 'Courier New', monospace; font-size: 0.88em;
+    }
+    input { min-width: 280px; flex: 1; }
+    button {
+      cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    button.primary {
+      background: #0f3460; border-color: #a8d8ea; color: #a8d8ea;
+    }
+    button.primary:hover { background: #1a5276; }
+    button.secondary { background: #1a1a2e; border-color: #444; color: #888; }
+    button.secondary:hover { background: #222244; }
+
+    .filters {
+      display: flex; gap: 8px; margin-bottom: 12px;
+      align-items: center; flex-wrap: wrap;
+    }
+    .filters span { color: #555; font-size: 0.8em; }
+    .filter-btn {
+      padding: 3px 11px; font-size: 0.78em; border-radius: 12px;
+      border: 1px solid #333; background: transparent; color: #666;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .filter-btn.active { font-weight: bold; }
+    .filter-ALL.active   { border-color: #a8d8ea; color: #a8d8ea; }
+    .filter-DEBUG.active { border-color: #7ec8e3; color: #7ec8e3; }
+    .filter-INFO.active  { border-color: #7ec87e; color: #7ec87e; }
+    .filter-WARN.active  { border-color: #e3c87e; color: #e3c87e; }
+    .filter-ERROR.active { border-color: #e37e7e; color: #e37e7e; }
+
+    .log-output {
+      background: #070710; border: 1px solid #1a1a30;
+      border-radius: 6px; padding: 10px;
+      min-height: 320px; max-height: 500px; overflow-y: auto;
+    }
+    .empty-msg { color: #333; text-align: center; padding: 60px 20px; font-size: 0.9em; }
+
+    .log-entry {
+      display: flex; gap: 8px; padding: 4px 6px;
+      border-bottom: 1px solid #0d0d1a;
+      font-size: 0.82em; align-items: flex-start;
+      border-left: 2px solid transparent;
+      transition: background 0.1s;
+    }
+    .log-entry:hover { background: #0f0f1f; }
+    .log-entry.hidden { display: none; }
+
+    .DEBUG { border-left-color: #7ec8e3; }
+    .INFO  { border-left-color: #7ec87e; }
+    .WARN  { border-left-color: #e3c87e; }
+    .ERROR { border-left-color: #e37e7e; }
+
+    .ts   { color: #333; flex-shrink: 0; width: 76px; }
+    .lvl  {
+      flex-shrink: 0; width: 48px; text-align: center;
+      border-radius: 2px; padding: 1px 3px;
+      font-size: 0.78em; font-weight: bold;
+    }
+    .DEBUG .lvl { background: #0d2a3a; color: #7ec8e3; }
+    .INFO  .lvl { background: #0d2a0d; color: #7ec87e; }
+    .WARN  .lvl { background: #2a2a0d; color: #e3c87e; }
+    .ERROR .lvl { background: #2a0d0d; color: #e37e7e; }
+
+    .typ {
+      flex-shrink: 0; width: 76px; text-align: center;
+      color: #555; font-size: 0.78em; padding: 1px 3px;
+      background: #0d0d1a; border-radius: 2px; align-self: center;
+    }
+    .val { color: #c8c8d8; word-break: break-all; flex: 1; }
+    .val.t-string  { color: #c8e37e; }
+    .val.t-number  { color: #7ec8e3; }
+    .val.t-boolean { color: #e3a87e; }
+    .val.t-null    { color: #888; font-style: italic; }
+    .val.t-undefined { color: #666; font-style: italic; }
+    .val.t-object  { color: #c8a8e3; }
+    .val.t-array   { color: #a8c8e3; }
+    .val.t-function { color: #e3c8a8; }
+
+    .stats {
+      display: flex; gap: 18px; margin-top: 10px;
+      font-size: 0.78em; color: #444;
+    }
+  </style>
+</head>
+<body>
+  <h1>Build Your Own Logger</h1>
+  <p class="subtitle">Chapter 1 — types, strings, template literals, and how JavaScript sees every value</p>
+
+  <div class="controls">
+    <div class="field">
+      <label>Level</label>
+      <select id="levelSelect">
+        <option>DEBUG</option>
+        <option selected>INFO</option>
+        <option>WARN</option>
+        <option>ERROR</option>
+      </select>
+    </div>
+    <div class="field" style="flex:1">
+      <label>Value to log — try: "hello", 42, true, null, {"name":"ada"}, [1,2,3]</label>
+      <input id="valueInput" type="text" placeholder='e.g.  "Server started"  or  42  or  {"user":"ada"}' />
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="primary" onclick="logFromInput()">Log It  ↵</button>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="secondary" onclick="logSamples()">Load Samples</button>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="secondary" onclick="clearLogs()">Clear</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span>Filter:</span>
+    <button class="filter-btn filter-ALL active"   onclick="setFilter('ALL')">ALL</button>
+    <button class="filter-btn filter-DEBUG"         onclick="setFilter('DEBUG')">DEBUG</button>
+    <button class="filter-btn filter-INFO"          onclick="setFilter('INFO')">INFO</button>
+    <button class="filter-btn filter-WARN"          onclick="setFilter('WARN')">WARN</button>
+    <button class="filter-btn filter-ERROR"         onclick="setFilter('ERROR')">ERROR</button>
+  </div>
+
+  <div class="log-output" id="logOutput">
+    <div class="empty-msg" id="emptyMsg">
+      No entries yet.<br>Click "Log It" to log a value, or "Load Samples" to see every type.
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: miniLogger
+//
+//  This is the complete logger. Read it in order — each function builds
+//  on the one before it.
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ─── Step 1: The type system ──────────────────────────────────────────
+//
+// JavaScript's `typeof` operator tells you what type a value is.
+// But it has one famous bug: typeof null === 'object'
+// (null is not an object — this was a 30-year-old mistake in the spec.)
+//
+// We fix it, and also distinguish arrays from plain objects.
+
+function getType(value) {
+  if (value === null)      return 'null';     // fix the infamous typeof null bug
+  if (Array.isArray(value)) return 'array';  // arrays are objects; be specific
+  return typeof value;
+  // Possible returns: 'undefined' | 'boolean' | 'number' | 'string'
+  //                   'array'     | 'object'  | 'function'
+}
+
+
+// ─── Step 2: Formatting ───────────────────────────────────────────────
+//
+// Turn any JavaScript value into a human-readable string.
+// Different types need different treatment:
+//   strings  → wrap in quotes so "hello" doesn't look like a keyword
+//   objects  → JSON.stringify so {a:1} shows as {"a":1}
+//   functions → show name if available
+
+function formatValue(value) {
+  const type = getType(value);
+
+  if (type === 'string') {
+    return `"${value}"`;              // quoted: "hello"  not  hello
+  }
+  if (type === 'null' || type === 'undefined') {
+    return String(value);             // String(null) → 'null'
+  }
+  if (type === 'array' || type === 'object') {
+    return JSON.stringify(value);     // {a:1,b:2}  →  '{"a":1,"b":2}'
+  }
+  if (type === 'function') {
+    return value.name
+      ? `[Function: ${value.name}]`
+      : '[Function (anonymous)]';
+  }
+  return String(value);               // numbers, booleans: String() is fine
+}
+
+
+// ─── Step 3: The logger factory ───────────────────────────────────────
+//
+// createLogger() returns an object with four methods (debug/info/warn/error).
+// The history array lives *inside* the factory — only the returned object
+// can touch it. This "private state via closure" is a core JS pattern.
+
+const LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+
+function createLogger(name) {
+  const history = [];     // private: only accessible through the returned object
+
+  function log(level, value) {
+    const now  = new Date();
+    const time = now.toTimeString().slice(0, 8);    // "14:23:07"
+
+    const entry = {
+      time,                               // "14:23:07"
+      timestamp: now.getTime(),           // milliseconds since epoch (for sorting)
+      level,                              // 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
+      type:      getType(value),          // 'string' | 'number' | 'object' | ...
+      formatted: formatValue(value),      // display-ready string
+      raw:       value,                   // the original, untouched value
+      name                                // logger name passed to createLogger()
+    };
+
+    history.push(entry);   // save every entry
+    return entry;          // return it so the caller can display it
+  }
+
+  // The public API: one method per level
+  return {
+    debug: (v) => log('DEBUG', v),
+    info:  (v) => log('INFO',  v),
+    warn:  (v) => log('WARN',  v),
+    error: (v) => log('ERROR', v),
+    get history() { return history; },     // read-only access to the history
+    clear: () => { history.length = 0; }  // trim the array in-place
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  THE APPLICATION
+// ═══════════════════════════════════════════════════════════════════════
+
+const logger = createLogger('app');
+let currentFilter = 'ALL';
+
+// parseInput: the user types text; we try to evaluate it as a JSON value.
+// JSON understands: strings ("hello"), numbers (42), booleans (true/false),
+// null, objects ({"key":"val"}), arrays ([1,2,3]).
+// If it doesn't parse as JSON, treat it as a plain string.
+function parseInput(text) {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (_) {
+    return trimmed;   // plain string
+  }
+}
+
+function renderEntry(entry) {
+  const output   = document.getElementById('logOutput');
+  const emptyMsg = document.getElementById('emptyMsg');
+  if (emptyMsg) emptyMsg.remove();
+
+  const div = document.createElement('div');
+  div.className = `log-entry ${entry.level}`;
+  if (currentFilter !== 'ALL' && currentFilter !== entry.level) {
+    div.classList.add('hidden');
+  }
+  div.dataset.level = entry.level;
+
+  div.innerHTML = `
+    <span class="ts">${entry.time}</span>
+    <span class="lvl">${entry.level}</span>
+    <span class="typ">${entry.type}</span>
+    <span class="val t-${entry.type}">${escHtml(entry.formatted)}</span>
+  `;
+
+  output.appendChild(div);
+  output.scrollTop = output.scrollHeight;
+  updateStats();
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function logFromInput() {
+  const level = document.getElementById('levelSelect').value;
+  const raw   = document.getElementById('valueInput').value;
+  if (!raw.trim()) return;
+
+  const value = parseInput(raw);
+  const entry = logger[level.toLowerCase()](value);
+  renderEntry(entry);
+
+  document.getElementById('valueInput').value = '';
+  document.getElementById('valueInput').focus();
+}
+
+function logSamples() {
+  // One sample per type, plus a mix of levels.
+  // This shows the logger handling every JavaScript type.
+  const samples = [
+    ['INFO',  'Server started on port 3000'],        // string
+    ['DEBUG', 42],                                    // number
+    ['DEBUG', 3.14],                                  // number (float)
+    ['DEBUG', true],                                  // boolean
+    ['DEBUG', false],                                 // boolean
+    ['WARN',  null],                                  // null
+    ['DEBUG', undefined],                             // undefined
+    ['INFO',  { user: 'ada', role: 'admin' }],       // object
+    ['INFO',  [1, 2, 3, 4, 5]],                      // array
+    ['WARN',  'Config file missing — using defaults'], // string
+    ['ERROR', 'Database connection refused'],          // string (error)
+    ['DEBUG', function greet(name) { return `Hi ${name}`; }]  // function
+  ];
+
+  samples.forEach(([level, value], i) => {
+    setTimeout(() => {
+      const entry = logger[level.toLowerCase()](value);
+      renderEntry(entry);
+    }, i * 110);
+  });
+}
+
+function clearLogs() {
+  logger.clear();
+  document.getElementById('logOutput').innerHTML =
+    '<div class="empty-msg" id="emptyMsg">No entries yet.<br>Click "Log It" to log a value, or "Load Samples" to see every type.</div>';
+  updateStats();
+}
+
+function setFilter(level) {
+  currentFilter = level;
+
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.filter-${level}`).classList.add('active');
+
+  document.querySelectorAll('.log-entry').forEach(entry => {
+    const show = level === 'ALL' || entry.dataset.level === level;
+    entry.classList.toggle('hidden', !show);
+  });
+}
+
+function updateStats() {
+  const counts = { DEBUG: 0, INFO: 0, WARN: 0, ERROR: 0 };
+  logger.history.forEach(e => counts[e.level]++);
+  const total = logger.history.length;
+  const colors = { DEBUG: '#7ec8e3', INFO: '#7ec87e', WARN: '#e3c87e', ERROR: '#e37e7e' };
+
+  document.getElementById('stats').innerHTML = total === 0 ? '' :
+    `<span>Total: ${total}</span>` +
+    Object.entries(counts)
+      .filter(([, n]) => n > 0)
+      .map(([l, n]) => `<span style="color:${colors[l]}">${l}: ${n}</span>`)
+      .join('');
+}
+
+document.getElementById('valueInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') logFromInput();
+});
+</script>
+</body>
+</html>
