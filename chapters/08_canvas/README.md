@@ -1,6 +1,25 @@
 # Chapter 8: Canvas
 
-The Canvas API lets you draw shapes, lines, and images directly on a pixel grid using JavaScript. It's the foundation for games, data visualization, and creative graphics on the web.
+## Why Canvas Exists
+
+HTML is great for structured content: text, buttons, forms, links. But it has no mechanism for drawing arbitrary shapes, pixels, or animations. You can't place a circle at an exact position, draw a freehand stroke, or update 60 times per second using regular HTML elements.
+
+The Canvas API solves this by providing a **pixel buffer** — a rectangle of memory you can draw on with JavaScript. The browser just displays whatever's in that buffer:
+
+```
+<canvas> element in HTML
+        ↓
+ctx = canvas.getContext('2d')   ← your drawing handle
+        ↓
+ctx.beginPath()
+ctx.arc(100, 100, 50, 0, Math.PI * 2)
+ctx.fillStyle = 'red'
+ctx.fill()
+        ↓
+Browser renders the pixel buffer to screen
+```
+
+**Canvas vs. SVG**: SVG is also used for graphics, but it creates DOM elements (like HTML). You can select and modify individual SVG shapes after drawing them. Canvas doesn't — once you draw a pixel, it's just a pixel. Canvas is better for: lots of objects updating every frame (games, animations), pixel-level manipulation (photo filters, flood fill). SVG is better for: scalable diagrams, interactive charts where you need to click individual elements.
 
 ## The Program: Drawing App
 
@@ -8,915 +27,443 @@ A fully-featured drawing application with pencil, shapes, color picker, and undo
 
 ## The Complete Program
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drawing App</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #1e1e2e;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      user-select: none;
-    }
-
-    /* ── Toolbar ─────────────────────────────────────────── */
-    .toolbar {
-      background: #2a2a3e;
-      border-bottom: 1px solid #3a3a5e;
-      padding: 0.5rem 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      flex-shrink: 0;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-    }
-
-    .toolbar-group {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0 0.5rem;
-      border-right: 1px solid #3a3a5e;
-    }
-
-    .toolbar-group:last-child { border-right: none; }
-
-    .toolbar-label {
-      font-size: 0.68rem;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-right: 0.2rem;
-    }
-
-    .tool-btn {
-      background: #3a3a5e;
-      border: 2px solid transparent;
-      border-radius: 8px;
-      color: #ccc;
-      cursor: pointer;
-      width: 36px;
-      height: 36px;
-      font-size: 1.1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s;
-      position: relative;
-    }
-
-    .tool-btn:hover { background: #4a4a7e; color: #fff; }
-
-    .tool-btn.active {
-      background: #5b5bef;
-      border-color: #8080ff;
-      color: #fff;
-      box-shadow: 0 0 10px rgba(91,91,239,0.5);
-    }
-
-    /* Color swatches */
-    .color-swatch {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      transition: transform 0.15s, border-color 0.15s;
-      flex-shrink: 0;
-    }
-
-    .color-swatch:hover { transform: scale(1.15); }
-    .color-swatch.active { border-color: #fff; transform: scale(1.15); }
-
-    #colorPicker {
-      width: 28px;
-      height: 28px;
-      border: 2px solid #555;
-      border-radius: 50%;
-      padding: 0;
-      cursor: pointer;
-      background: none;
-      overflow: hidden;
-    }
-
-    /* Size slider */
-    #sizeSlider {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 90px;
-      height: 4px;
-      border-radius: 2px;
-      background: #5b5bef;
-      outline: none;
-      cursor: pointer;
-    }
-
-    #sizeSlider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #fff;
-      cursor: pointer;
-      box-shadow: 0 0 4px rgba(0,0,0,0.4);
-    }
-
-    .size-preview {
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .size-dot {
-      background: #fff;
-      border-radius: 50%;
-      transition: width 0.1s, height 0.1s;
-    }
-
-    /* Opacity */
-    #opacitySlider {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 70px;
-      height: 4px;
-      border-radius: 2px;
-      background: linear-gradient(to right, transparent, #fff);
-      outline: none;
-      cursor: pointer;
-    }
-
-    #opacitySlider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #fff;
-      cursor: pointer;
-    }
-
-    /* ── Canvas area ─────────────────────────────────────── */
-    .canvas-wrap {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background:
-        linear-gradient(45deg, #252535 25%, transparent 25%),
-        linear-gradient(-45deg, #252535 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #252535 75%),
-        linear-gradient(-45deg, transparent 75%, #252535 75%);
-      background-size: 20px 20px;
-      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
-      background-color: #1e1e2e;
-      overflow: hidden;
-    }
-
-    #canvas {
-      background: #fff;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-      cursor: crosshair;
-      display: block;
-      touch-action: none;
-    }
-
-    /* ── Status bar ──────────────────────────────────────── */
-    .statusbar {
-      background: #2a2a3e;
-      border-top: 1px solid #3a3a5e;
-      padding: 0.3rem 1rem;
-      display: flex;
-      gap: 1.5rem;
-      font-size: 0.72rem;
-      color: #555;
-      flex-shrink: 0;
-    }
-
-    .statusbar strong { color: #bbb; }
-  </style>
-</head>
-<body>
-
-<div class="toolbar">
-  <!-- Tools -->
-  <div class="toolbar-group">
-    <span class="toolbar-label">Tool</span>
-    <button class="tool-btn active" data-tool="pencil" title="Pencil (P)">✏️</button>
-    <button class="tool-btn" data-tool="line"    title="Line (L)">╱</button>
-    <button class="tool-btn" data-tool="rect"    title="Rectangle (R)">▭</button>
-    <button class="tool-btn" data-tool="circle"  title="Circle (C)">○</button>
-    <button class="tool-btn" data-tool="fill"    title="Fill (F)">🪣</button>
-    <button class="tool-btn" data-tool="eraser"  title="Eraser (E)">🧹</button>
-  </div>
-
-  <!-- Colors -->
-  <div class="toolbar-group">
-    <span class="toolbar-label">Color</span>
-    <div class="color-swatch active" style="background:#000000" data-color="#000000"></div>
-    <div class="color-swatch" style="background:#ef4444" data-color="#ef4444"></div>
-    <div class="color-swatch" style="background:#f97316" data-color="#f97316"></div>
-    <div class="color-swatch" style="background:#eab308" data-color="#eab308"></div>
-    <div class="color-swatch" style="background:#22c55e" data-color="#22c55e"></div>
-    <div class="color-swatch" style="background:#3b82f6" data-color="#3b82f6"></div>
-    <div class="color-swatch" style="background:#8b5cf6" data-color="#8b5cf6"></div>
-    <div class="color-swatch" style="background:#e5e7eb;border:1px solid #555" data-color="#e5e7eb"></div>
-    <input type="color" id="colorPicker" value="#000000" title="Custom color">
-  </div>
-
-  <!-- Size -->
-  <div class="toolbar-group">
-    <span class="toolbar-label">Size</span>
-    <input type="range" id="sizeSlider" min="1" max="60" value="6">
-    <div class="size-preview"><div class="size-dot" id="sizeDot" style="width:6px;height:6px"></div></div>
-  </div>
-
-  <!-- Opacity -->
-  <div class="toolbar-group">
-    <span class="toolbar-label">Opacity</span>
-    <input type="range" id="opacitySlider" min="5" max="100" value="100">
-    <span id="opacityVal" style="font-size:0.75rem;color:#888;min-width:2.5em">100%</span>
-  </div>
-
-  <!-- Actions -->
-  <div class="toolbar-group">
-    <button class="tool-btn" id="undoBtn"  title="Undo (Ctrl+Z)">↩️</button>
-    <button class="tool-btn" id="redoBtn"  title="Redo (Ctrl+Y)">↪️</button>
-    <button class="tool-btn" id="clearBtn" title="Clear canvas">🗑️</button>
-    <button class="tool-btn" id="saveBtn"  title="Save as PNG">💾</button>
-  </div>
-</div>
-
-<div class="canvas-wrap">
-  <canvas id="canvas" width="900" height="540"></canvas>
-</div>
-
-<div class="statusbar">
-  <div>Tool: <strong id="statusTool">Pencil</strong></div>
-  <div>Position: <strong id="statusPos">—</strong></div>
-  <div>Size: <strong id="statusSize">6px</strong></div>
-  <div>Undo history: <strong id="statusUndo">0</strong></div>
-</div>
-
-<script>
-  // ─── Canvas setup ─────────────────────────────────────────────
-  const canvas = document.getElementById('canvas');
-  const ctx    = canvas.getContext('2d');           // getContext('2d')
-
-  // ─── App state ────────────────────────────────────────────────
-  let tool      = 'pencil';
-  let color     = '#000000';
-  let lineWidth = 6;
-  let opacity   = 1.0;
-  let isDrawing = false;
-  let startX = 0, startY = 0;
-  let lastX  = 0, lastY  = 0;
-  let snapshotBeforeShape = null;
-
-  // Undo/redo stacks — store ImageData snapshots
-  const undoStack = [];
-  const redoStack = [];
-
-  // ─── Save canvas snapshot for undo ───────────────────────────
-  function saveSnapshot() {
-    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    if (undoStack.length > 40) undoStack.shift();   // cap memory usage
-    redoStack.length = 0;                            // new stroke clears redo
-    document.getElementById('statusUndo').textContent = undoStack.length;
-  }
-
-  // ─── Pencil / eraser: freehand drawing ───────────────────────
-  function drawPencil(x, y) {
-    ctx.beginPath();                                  // beginPath
-    ctx.moveTo(lastX, lastY);                        // moveTo
-    ctx.lineTo(x, y);                                // lineTo
-    ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-    ctx.globalAlpha = opacity;
-    ctx.lineWidth   = lineWidth;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-    ctx.stroke();                                     // stroke
-    [lastX, lastY] = [x, y];
-  }
-
-  // ─── Shape tools: preview while dragging ─────────────────────
-  function drawShapePreview(x, y) {
-    // Restore the canvas to its state at drag-start, then overdraw the preview
-    ctx.putImageData(snapshotBeforeShape, 0, 0);
-
-    ctx.save();                                       // save context state
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = opacity;
-    ctx.lineWidth   = lineWidth;
-    ctx.lineCap     = 'round';
-
-    if (tool === 'line') {
-      ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-
-    } else if (tool === 'rect') {
-      ctx.beginPath();
-      ctx.strokeRect(startX, startY, x - startX, y - startY);
-
-    } else if (tool === 'circle') {
-      const rx = Math.abs(x - startX) / 2;
-      const ry = Math.abs(y - startY) / 2;
-      const cx = startX + (x - startX) / 2;
-      const cy = startY + (y - startY) / 2;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2); // arc
-      ctx.stroke();
-    }
-
-    ctx.restore();                                    // restore context state
-  }
-
-  // ─── Flood fill (paint bucket tool) ──────────────────────────
-  function floodFill(px, py, fillHex) {
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data    = imgData.data;   // flat Uint8ClampedArray [R,G,B,A, R,G,B,A, …]
-
-    const fr = parseInt(fillHex.slice(1, 3), 16);
-    const fg = parseInt(fillHex.slice(3, 5), 16);
-    const fb = parseInt(fillHex.slice(5, 7), 16);
-    const fa = Math.round(opacity * 255);
-
-    const idx = (py * canvas.width + px) * 4;
-    const [tr, tg, tb, ta] = [data[idx], data[idx+1], data[idx+2], data[idx+3]];
-
-    if (tr === fr && tg === fg && tb === fb) return; // already that color
-
-    const stack   = [[px, py]];
-    const visited = new Uint8Array(canvas.width * canvas.height);
-
-    while (stack.length) {
-      const [cx, cy] = stack.pop();
-      if (cx < 0 || cx >= canvas.width || cy < 0 || cy >= canvas.height) continue;
-      const i = cy * canvas.width + cx;
-      if (visited[i]) continue;
-      visited[i] = 1;
-
-      const pi = i * 4;
-      if (data[pi]   !== tr || data[pi+1] !== tg ||
-          data[pi+2] !== tb || data[pi+3] !== ta) continue;
-
-      data[pi] = fr; data[pi+1] = fg; data[pi+2] = fb; data[pi+3] = fa;
-      stack.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
-    }
-
-    ctx.putImageData(imgData, 0, 0);
-  }
-
-  // ─── Get canvas-relative coordinates ─────────────────────────
-  function getPos(e) {
-    const rect   = canvas.getBoundingClientRect();
-    const scaleX = canvas.width  / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const src    = e.touches ? e.touches[0] : e;
-    return [
-      Math.round((src.clientX - rect.left) * scaleX),
-      Math.round((src.clientY - rect.top)  * scaleY),
-    ];
-  }
-
-  // ─── Mouse events ─────────────────────────────────────────────
-  canvas.addEventListener('mousedown', e => {
-    e.preventDefault();
-    const [x, y] = getPos(e);
-
-    if (tool === 'fill') {
-      saveSnapshot();
-      floodFill(x, y, color);
-      return;
-    }
-
-    saveSnapshot();
-    isDrawing = true;
-    [startX, startY] = [x, y];
-    [lastX,  lastY]  = [x, y];
-
-    if (['line','rect','circle'].includes(tool)) {
-      snapshotBeforeShape = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    }
-
-    // Draw a dot on single click
-    if (tool === 'pencil' || tool === 'eraser') {
-      drawPencil(x + 0.1, y + 0.1);
-    }
-  });
-
-  canvas.addEventListener('mousemove', e => {
-    const [x, y] = getPos(e);
-    document.getElementById('statusPos').textContent = `${x}, ${y}`;
-    if (!isDrawing) return;
-
-    if (tool === 'pencil' || tool === 'eraser') {
-      drawPencil(x, y);
-    } else {
-      drawShapePreview(x, y);
-    }
-  });
-
-  function stopDrawing() {
-    isDrawing = false;
-    snapshotBeforeShape = null;
-  }
-
-  canvas.addEventListener('mouseup',    stopDrawing);
-  canvas.addEventListener('mouseleave', stopDrawing);
-
-  // Touch support
-  canvas.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const t = e.touches[0];
-    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY }));
-  }, { passive: false });
-
-  canvas.addEventListener('touchmove', e => {
-    e.preventDefault();
-    const t = e.touches[0];
-    canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: t.clientX, clientY: t.clientY }));
-  }, { passive: false });
-
-  canvas.addEventListener('touchend', () => stopDrawing());
-
-  // ─── Toolbar: event delegation ────────────────────────────────
-  document.querySelector('.toolbar').addEventListener('click', e => {
-    // Tool buttons
-    const toolBtn = e.target.closest('[data-tool]');
-    if (toolBtn) {
-      tool = toolBtn.dataset.tool;
-      document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
-      toolBtn.classList.add('active');
-      document.getElementById('statusTool').textContent =
-        toolBtn.title.split(' ')[0]; // first word of title
-    }
-
-    // Color swatches
-    const swatch = e.target.closest('[data-color]');
-    if (swatch) {
-      color = swatch.dataset.color;
-      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-      swatch.classList.add('active');
-      document.getElementById('colorPicker').value = color;
-    }
-  });
-
-  document.getElementById('colorPicker').addEventListener('input', e => {
-    color = e.target.value;
-    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-  });
-
-  document.getElementById('sizeSlider').addEventListener('input', e => {
-    lineWidth = parseInt(e.target.value);
-    const display = Math.min(lineWidth, 22);
-    document.getElementById('sizeDot').style.cssText =
-      `width:${display}px;height:${display}px`;
-    document.getElementById('statusSize').textContent = `${lineWidth}px`;
-  });
-
-  document.getElementById('opacitySlider').addEventListener('input', e => {
-    opacity = parseInt(e.target.value) / 100;
-    document.getElementById('opacityVal').textContent = `${e.target.value}%`;
-  });
-
-  // ─── Undo ─────────────────────────────────────────────────────
-  function undo() {
-    if (!undoStack.length) return;
-    redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    ctx.putImageData(undoStack.pop(), 0, 0);
-    document.getElementById('statusUndo').textContent = undoStack.length;
-  }
-
-  function redo() {
-    if (!redoStack.length) return;
-    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    ctx.putImageData(redoStack.pop(), 0, 0);
-    document.getElementById('statusUndo').textContent = undoStack.length;
-  }
-
-  document.getElementById('undoBtn').addEventListener('click', undo);
-  document.getElementById('redoBtn').addEventListener('click', redo);
-
-  // ─── Clear canvas ─────────────────────────────────────────────
-  document.getElementById('clearBtn').addEventListener('click', () => {
-    saveSnapshot();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);  // clearRect
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);   // fillRect
-  });
-
-  // ─── Save as PNG ──────────────────────────────────────────────
-  document.getElementById('saveBtn').addEventListener('click', () => {
-    const a    = document.createElement('a');
-    a.href     = canvas.toDataURL('image/png');
-    a.download = `drawing-${Date.now()}.png`;
-    a.click();
-  });
-
-  // ─── Keyboard shortcuts ───────────────────────────────────────
-  document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); return; }
-    if (e.ctrlKey || e.metaKey) return;
-
-    const toolKeys = { p:'pencil', e:'eraser', l:'line', r:'rect', c:'circle', f:'fill' };
-    if (toolKeys[e.key]) {
-      tool = toolKeys[e.key];
-      document.querySelectorAll('[data-tool]').forEach(b =>
-        b.classList.toggle('active', b.dataset.tool === tool));
-      document.getElementById('statusTool').textContent =
-        tool.charAt(0).toUpperCase() + tool.slice(1);
-    }
-  });
-
-  // ─── Initialize: white canvas + welcome text ──────────────────
-  function init() {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);   // fillRect
-
-    // Draw welcome message with requestAnimationFrame
-    requestAnimationFrame(() => {                       // requestAnimationFrame
-      ctx.save();
-      ctx.font      = 'bold 26px system-ui';
-      ctx.fillStyle = '#dde1f7';
-      ctx.textAlign = 'center';
-      ctx.fillText('✏️  Start drawing!', canvas.width / 2, canvas.height / 2 - 10);
-      ctx.font      = '15px system-ui';
-      ctx.fillStyle = '#c4caf5';
-      ctx.fillText('Tools: P pencil  L line  R rect  C circle  F fill  E eraser', canvas.width / 2, canvas.height / 2 + 24);
-      ctx.restore();
-    });
-  }
-
-  init();
-</script>
-</body>
-</html>
-```
+See `drawing_app.html` for the full source. Key concepts are explained below.
 
 ## How It Works
 
-### Getting a Canvas Context
+### The Coordinate System
 
-To draw on a canvas, you first get its 2D drawing context:
+Canvas uses a coordinate system where (0, 0) is the **top-left corner**. X increases to the right, Y increases *downward*:
+
+```
+(0,0) ─────────────────────── (900,0)
+  │                                │
+  │          canvas                │
+  │                                │
+  │   (100, 80) ← a point          │
+  │                                │
+(0,540) ──────────────────── (900,540)
+```
+
+This trips up everyone coming from math class where Y goes up. In Canvas (and most computer graphics), Y goes down. So to draw below a point, *increase* Y.
+
+### Getting a Context
+
+To draw, you first get a 2D drawing context:
 
 ```javascript
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 ```
 
-The context object (`ctx`) is where all the drawing methods live. It maintains state like current color, line width, and position.
-
-### Mouse Events on Canvas
-
-Drawing happens through three events: `mousedown` (start), `mousemove` (while dragging), and `mouseup` (end):
-
-```javascript
-canvas.addEventListener('mousedown', e => {
-  isDrawing = true;
-  [startX, startY] = getPos(e);
-});
-
-canvas.addEventListener('mousemove', e => {
-  if (isDrawing) drawPencil(getPos(e)[0], getPos(e)[1]);
-});
-
-canvas.addEventListener('mouseup', () => {
-  isDrawing = false;
-});
-```
-
-### Coordinate Systems
-
-The canvas has its own internal resolution (900x540 pixels) that may be displayed larger or smaller on screen. Use `getBoundingClientRect()` to convert screen coordinates to canvas coordinates:
-
-```javascript
-function getPos(e) {
-  const rect   = canvas.getBoundingClientRect();
-  const scaleX = canvas.width  / rect.width;
-  const scaleY = canvas.height / rect.height;
-  return [
-    Math.round((e.clientX - rect.left) * scaleX),
-    Math.round((e.clientY - rect.top)  * scaleY),
-  ];
-}
-```
+`ctx` is the object with all drawing methods. Think of it as your brush — it maintains the current color, line width, opacity, and other settings, and it has methods for drawing shapes.
 
 ### Drawing Paths
 
-Paths are the foundation of canvas drawing. Create one with `beginPath()`, move the brush with `moveTo()`, draw lines with `lineTo()`, and finalize with `stroke()`:
+A **path** is a series of points and lines that define a shape. You build the path, then either `stroke()` it (outline) or `fill()` it (solid):
 
 ```javascript
-function drawPencil(x, y) {
-  ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(x, y);
-  ctx.lineWidth = 6;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-}
+// Freehand pencil stroke
+ctx.beginPath();          // start a new path
+ctx.moveTo(lastX, lastY); // lift the pen to the starting point
+ctx.lineTo(x, y);         // draw a line to the new point
+ctx.lineWidth = 6;
+ctx.lineCap = 'round';    // rounded line ends (vs 'butt' or 'square')
+ctx.strokeStyle = '#ff0000';
+ctx.stroke();             // render the path to pixels
+```
+
+**Why `beginPath()`?** Without it, every subsequent `stroke()` or `fill()` would also redraw all previous paths. `beginPath()` says "forget everything before, start fresh."
+
+The `moveTo`/`lineTo` pattern:
+```
+moveTo(50, 50) ── no line, just positions the "pen"
+lineTo(100, 50) ── draws line from (50,50) to (100,50)
+lineTo(100, 100) ── draws line from (100,50) to (100,100)
+stroke() ── renders these as a visible L-shape
 ```
 
 ### Drawing Shapes
 
-For shapes, use `strokeRect()` for rectangles, `ellipse()` for circles and ovals:
+Rectangles and ellipses have dedicated methods:
 
 ```javascript
-ctx.strokeRect(startX, startY, width, height);   // Rectangle
+// Rectangle (outline)
+ctx.strokeRect(x, y, width, height);
 
+// Rectangle (filled)
+ctx.fillRect(x, y, width, height);
+
+// Ellipse (works for circles too)
 ctx.beginPath();
-ctx.ellipse(centerX, centerY, radiusX, radiusY, rotation, 0, Math.PI * 2);
-ctx.stroke();                                      // Circle
+ctx.ellipse(
+  centerX, centerY,  // center point
+  radiusX, radiusY,  // horizontal and vertical radius
+  0,                 // rotation angle
+  0, Math.PI * 2     // start and end angle (full circle = 0 to 2π)
+);
+ctx.stroke();
 ```
 
-### Canvas State
+For a perfect circle, make `radiusX === radiusY`. For an oval, make them different.
 
-Use `save()` and `restore()` to preserve and reset drawing properties like color and line width:
+### Save/Restore Context State
+
+The context remembers settings: `strokeStyle`, `lineWidth`, `globalAlpha`, `lineCap`. When you want to temporarily change settings and then restore the original:
+
+```javascript
+ctx.save();                       // push current state onto a stack
+ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+ctx.lineWidth = 2;
+ctx.stroke();                     // draw with these temporary settings
+ctx.restore();                    // pop state — original settings restored
+```
+
+This is like a "checkpoint" system. `save()` and `restore()` can be nested. The drawing app uses this for shape previews: save state before the preview stroke, restore after.
+
+### Shape Previews: Snapshot and Redraw
+
+The trick for live shape previews while dragging:
+
+```javascript
+// mousedown: capture canvas state before the drag starts
+snapshotBeforeShape = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+// mousemove: restore snapshot, then draw current preview
+ctx.putImageData(snapshotBeforeShape, 0, 0);  // undo preview
+// ... draw new preview at current mouse position ...
+
+// mouseup: the shape is now permanent (snapshot is discarded)
+snapshotBeforeShape = null;
+```
+
+`getImageData()` captures every pixel as a flat array of RGBA values. `putImageData()` restores them. This is how undo/redo works too — the undo stack is an array of `ImageData` snapshots.
+
+### Mouse Coordinate Mapping
+
+The canvas element on screen may be a different size than its internal resolution. You must convert screen coordinates to canvas coordinates:
+
+```javascript
+function getPos(e) {
+  const rect   = canvas.getBoundingClientRect(); // element's position on screen
+  const scaleX = canvas.width  / rect.width;    // ratio: canvas pixels / screen pixels
+  const scaleY = canvas.height / rect.height;
+  const src    = e.touches ? e.touches[0] : e;  // touch or mouse
+  return [
+    Math.round((src.clientX - rect.left) * scaleX),
+    Math.round((src.clientY - rect.top)  * scaleY),
+  ];
+}
+```
+
+Without this scaling, drawing on a canvas displayed at half its natural size would put strokes in the wrong place.
+
+### Progressive Build: From Zero to Drawing App
+
+Here's how the complexity built up:
+
+**v1 — Just draw a dot on click:**
+```javascript
+canvas.addEventListener('click', e => {
+  const [x, y] = getPos(e);
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+});
+```
+
+**v2 — Track mouse movement while held down:**
+```javascript
+let isDrawing = false;
+canvas.addEventListener('mousedown', e => { isDrawing = true; [lastX, lastY] = getPos(e); });
+canvas.addEventListener('mousemove', e => { if (isDrawing) drawLine(...getPos(e)); });
+canvas.addEventListener('mouseup',   () => { isDrawing = false; });
+```
+
+**v3 — Add colors, line width, multiple tools** (with toolbar buttons triggering state changes)
+
+**v4 — Add undo/redo** (snapshotting `ImageData` before each stroke)
+
+**v5 — Add shape tools** (preview via snapshot/restore pattern)
+
+Each version is a complete working app. The drawing app in `drawing_app.html` is v5 — but every concept builds on the v1 foundation.
+
+---
+
+## Guided Exercises
+
+### Exercise 1: A Spray Paint Tool
+
+**The Challenge:** Add a spray paint tool that draws random dots in a circular burst around the cursor while the mouse button is held. The longer you hold, the denser the spray.
+
+**Where to start:** Spray paint is fundamentally different from pencil — it draws *while held*, not while *moving*. Think about how you'd trigger drawing repeatedly while the mouse button is down.
+
+*(Hint: `mousemove` only fires when the mouse moves. What would you use to draw continuously, even when the mouse is still?)*
+
+---
+
+**Step 1: Add the tool button.**
+
+In the HTML toolbar, add a spray tool button:
+
+```html
+<button class="tool-btn" data-tool="spray" title="Spray (S)">💨</button>
+```
+
+Also add `s` to the keyboard shortcuts in the `toolKeys` map.
+
+---
+
+**Step 2: Think about the spray mechanism.**
+
+Spray paint needs to fire repeatedly while held. `setInterval` can run a function on a timer:
+
+```javascript
+let sprayInterval = null;
+
+function startSpray(x, y) {
+  // Store the spray center so the interval closure can access it
+  let cx = x, cy = y;
+
+  sprayInterval = setInterval(() => {
+    for (let i = 0; i < 20; i++) {
+      const angle    = Math.random() * Math.PI * 2;
+      const distance = Math.random() * lineWidth * 2;
+      const dotX = cx + Math.cos(angle) * distance;
+      const dotY = cy + Math.sin(angle) * distance;
+
+      ctx.fillStyle = color;
+      ctx.globalAlpha = opacity * 0.3;  // individual dots are faint
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, 30);  // fire every 30ms
+}
+
+function stopSpray() {
+  if (sprayInterval) {
+    clearInterval(sprayInterval);
+    sprayInterval = null;
+  }
+}
+```
+
+**What does `Math.cos(angle) * distance` do?** It converts a polar coordinate (angle + distance from center) to a Cartesian offset (x, y). `Math.cos` gives the X component, `Math.sin` gives Y. Random angle + random distance = random point inside a circle.
+
+---
+
+**Step 3: Update mouse event handlers.**
+
+In `mousedown`:
+```javascript
+if (tool === 'spray') {
+  saveSnapshot();
+  const [x, y] = getPos(e);
+  startSpray(x, y);
+  return;
+}
+```
+
+In `mousemove` (to follow the cursor):
+```javascript
+if (tool === 'spray' && sprayInterval) {
+  // Update the spray center — but how? The interval closure has `cx, cy`...
+}
+```
+
+**Think about it:** The spray center needs to move with the cursor. But the `setInterval` callback has its own closure over `cx` and `cy`. How do you update them?
+
+*(Answer: Make `cx` and `cy` variables in the outer scope that the interval closure reads each time it fires. Use `let` so they're mutable. Update them in `mousemove`.)*
+
+---
+
+**Step 4: The complete spray pattern.**
+
+```javascript
+let sprayCenter = { x: 0, y: 0 };
+let sprayInterval = null;
+
+function startSpray(x, y) {
+  sprayCenter = { x, y };
+  sprayInterval = setInterval(() => {
+    for (let i = 0; i < 20; i++) {
+      const angle    = Math.random() * Math.PI * 2;
+      const dist     = Math.random() * lineWidth * 2;
+      const dotX     = sprayCenter.x + Math.cos(angle) * dist;
+      const dotY     = sprayCenter.y + Math.sin(angle) * dist;
+      ctx.fillStyle   = tool === 'eraser' ? '#fff' : color;
+      ctx.globalAlpha = opacity * 0.25;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, 30);
+}
+```
+
+In `mousemove`:
+```javascript
+if (tool === 'spray') sprayCenter = { x, y };
+```
+
+In `mouseup` and `mouseleave`: call `stopSpray()`.
+
+---
+
+### Exercise 2: Text Tool
+
+**The Challenge:** Add a text tool. When selected, clicking the canvas should place an `<input>` element at the click position. Pressing Enter commits the text to the canvas; pressing Escape cancels.
+
+**Where to start:** This tool works differently from all others — it creates a temporary HTML element overlaid on the canvas, then "burns" the text into the canvas pixel buffer when confirmed.
+
+---
+
+**Step 1: Handle the click to create the text input.**
+
+In `mousedown`, when `tool === 'text'`:
+
+```javascript
+if (tool === 'text') {
+  const [x, y] = getPos(e);
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+
+  // Create a positioned input element
+  const textInput = document.createElement('input');
+  textInput.style.cssText = `
+    position: absolute;
+    left: ${e.clientX}px;
+    top: ${e.clientY}px;
+    background: transparent;
+    border: 1px dashed #888;
+    color: ${color};
+    font-size: ${Math.max(12, lineWidth * 2)}px;
+    outline: none;
+    padding: 2px;
+    min-width: 100px;
+    z-index: 10;
+  `;
+  document.body.appendChild(textInput);
+  textInput.focus();
+
+  // Commit on Enter
+  textInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      saveSnapshot();
+      ctx.font = `${Math.max(12, lineWidth * 2)}px sans-serif`;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = opacity;
+      ctx.fillText(textInput.value, x, y);
+      textInput.remove();
+    } else if (e.key === 'Escape') {
+      textInput.remove();
+    }
+  });
+  return;
+}
+```
+
+**Why overlay an HTML input instead of drawing characters on canvas?** Canvas doesn't provide a cursor, selection, or editing. An HTML `<input>` gives you all that for free. When the user is done, you "bake" the text into the canvas with `fillText()` and remove the HTML element.
+
+**Step 2: Add the tool button** and test. The text appears where you click, you type, Enter commits it.
+
+---
+
+### Exercise 3: Zoom and Pan
+
+**The Challenge:** Add Ctrl+scroll to zoom in and out. Add a pan mode (hold Space to temporarily switch) where dragging moves the viewport instead of drawing.
+
+This is a significant extension. The core challenge: the coordinate transform.
+
+**Where to start:** Zooming and panning require a **transform matrix**. Instead of scaling each coordinate manually, you let the canvas context apply a transform before rendering.
+
+---
+
+**Step 1: Understand canvas transforms.**
 
 ```javascript
 ctx.save();
-ctx.strokeStyle = '#ff0000';
-ctx.lineWidth = 10;
-ctx.stroke();
-ctx.restore();  // Reverts to previous state
+ctx.scale(2, 2);           // zoom in 2x
+ctx.translate(-100, -50);  // pan to show different area
+// ... draw things here — they appear transformed
+ctx.restore();             // undo the transform
 ```
 
-To implement undo, capture pixel data as a snapshot with `getImageData()` and restore it with `putImageData()`:
+For a drawing app, you apply the transform before every draw call. The transform state needs to persist across frames.
+
+**Step 2: Add transform state:**
 
 ```javascript
-function saveSnapshot() {
-  undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-}
+let zoom   = 1;
+let panX   = 0;
+let panY   = 0;
 
-function undo() {
-  ctx.putImageData(undoStack.pop(), 0, 0);
+function applyTransform() {
+  ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 }
 ```
 
-### The Undo System
+**Step 3: Adjust coordinate conversion.**
 
-Every time you draw, a snapshot of the entire canvas is saved to an array. When you undo, restore the previous snapshot. Redo works the same way but in reverse. A cap on memory (40 snapshots) prevents the browser from slowing down:
+When zoom/pan are non-default, `getPos()` needs to account for them:
 
 ```javascript
-const undoStack = [];
-
-function saveSnapshot() {
-  undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-  if (undoStack.length > 40) undoStack.shift();  // Remove oldest
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const src = e.touches ? e.touches[0] : e;
+  const screenX = (src.clientX - rect.left) * scaleX;
+  const screenY = (src.clientY - rect.top)  * scaleY;
+  // Convert screen coordinates to canvas "world" coordinates
+  return [
+    Math.round((screenX - panX) / zoom),
+    Math.round((screenY - panY) / zoom),
+  ];
 }
 ```
 
-The flood fill (bucket) tool reads pixel data directly and changes all connected pixels of the same color to a new color by walking a stack of coordinates.
+**Step 4: Add scroll-to-zoom.**
 
-## Try It
-
-1. **Change the welcome message.** Edit the text in the `init()` function where it says "Start drawing!". Make it say something funny.
-
-2. **Add keyboard shortcuts for colors.** Press number keys (1-8) to switch between the preset colors instantly. Hint: listen for `keydown` and check `e.key === '1'`, etc.
-
-3. **Add a polygon (triangle) tool.** Create a new tool button and drawing mode that lets you click three times to draw a triangle. Store the points in an array and draw when the third click happens.
-
-4. **Add a text tool.** Let the user type a message and click the canvas to place text. Use `ctx.font` and `ctx.fillText()` to render it.
-
-## Exercises
-
-1. **Build a shape grid.** Create a drawing program where clicking the canvas adds circles in a grid pattern (3x3 grid per click). Use nested loops with `ctx.beginPath()` and `ctx.arc()` to draw multiple circles at once. Each click should add circles to the next grid position, cycling back to the start after 9 clicks. Hint: Use a counter variable to track which grid cell to fill.
-
-2. **Implement a line thickness preview tool.** As the user drags the size slider, draw a preview of the actual brush stroke on the canvas in real time (not just the dot preview in the toolbar). When they move away, clear the preview. Implement this by drawing on a temporary layer or capturing/restoring canvas state with snapshots.
-
-3. **Add a spray paint tool.** Create a new tool that draws random dots in a circular burst pattern around the mouse position, like a can of spray paint. When held down, create multiple random dots each frame within a radius. Use `Math.random()` to vary the position and opacity of each dot. Make it work with `mousemove` while holding down the button.
-
-## Solutions
-
-### Exercise 1: Shape Grid
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Shape Grid</title>
-  <style>
-    body { margin: 0; background: #1e1e2e; display: flex; justify-content: center; align-items: center; height: 100vh; }
-    canvas { background: white; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: block; }
-  </style>
-</head>
-<body>
-  <canvas id="canvas" width="600" height="600"></canvas>
-
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    const gridSize = 100;
-    let clickCount = 0;
-    
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    canvas.addEventListener('click', e => {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      const gridX = clickCount % 3;
-      const gridY = Math.floor(clickCount / 3) % 3;
-      
-      const baseX = gridX * gridSize;
-      const baseY = gridY * gridSize;
-      
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-          ctx.beginPath();
-          ctx.arc(
-            baseX + i * 30 + 15,
-            baseY + j * 30 + 15,
-            8,
-            0,
-            Math.PI * 2
-          );
-          ctx.fillStyle = `hsl(${Math.random() * 360}, 70%, 60%)`;
-          ctx.fill();
-        }
-      }
-      
-      clickCount++;
-    });
-  </script>
-</body>
-</html>
+```javascript
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  zoom = Math.min(8, Math.max(0.25, zoom * factor));
+  // Optional: zoom toward cursor position
+});
 ```
 
-### Exercise 2: Line Thickness Preview
+The complete zoom/pan implementation is in the "Building with Claude" section — this exercise is about understanding the transform concept.
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Thickness Preview</title>
-  <style>
-    body { margin: 0; background: #1e1e2e; padding: 20px; }
-    canvas { background: white; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: block; margin-bottom: 20px; }
-    input { width: 200px; height: 8px; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <div>
-    <label>Brush Size: </label>
-    <input type="range" id="sizeSlider" min="1" max="100" value="10">
-  </div>
-  <canvas id="canvas" width="800" height="400"></canvas>
-
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const sizeSlider = document.getElementById('sizeSlider');
-    
-    let previewX = canvas.width / 2;
-    let previewY = canvas.height / 2;
-    let savedImageData = null;
-    
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    sizeSlider.addEventListener('input', e => {
-      // Restore previous state
-      if (savedImageData) ctx.putImageData(savedImageData, 0, 0);
-      
-      // Save current state and draw preview
-      savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      const size = parseInt(e.target.value);
-      ctx.beginPath();
-      ctx.arc(previewX, previewY, size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#000';
-      ctx.fill();
-    });
-    
-    canvas.addEventListener('mousemove', e => {
-      const rect = canvas.getBoundingClientRect();
-      previewX = e.clientX - rect.left;
-      previewY = e.clientY - rect.top;
-      
-      // Restore and redraw preview at new position
-      if (savedImageData) ctx.putImageData(savedImageData, 0, 0);
-      
-      savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const size = parseInt(sizeSlider.value);
-      ctx.beginPath();
-      ctx.arc(previewX, previewY, size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#0002';
-      ctx.fill();
-    });
-    
-    canvas.addEventListener('mouseleave', () => {
-      if (savedImageData) ctx.putImageData(savedImageData, 0, 0);
-      savedImageData = null;
-    });
-  </script>
-</body>
-</html>
-```
-
-### Exercise 3: Spray Paint Tool
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Spray Paint</title>
-  <style>
-    body { margin: 0; background: #1e1e2e; display: flex; justify-content: center; align-items: center; height: 100vh; }
-    canvas { background: white; box-shadow: 0 0 20px rgba(0,0,0,0.5); cursor: crosshair; }
-  </style>
-</head>
-<body>
-  <canvas id="canvas" width="800" height="600"></canvas>
-
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    let isSpaying = false;
-    const sprayRadius = 30;
-    const dotsPerFrame = 15;
-    
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    canvas.addEventListener('mousedown', () => {
-      isSpaying = true;
-    });
-    
-    canvas.addEventListener('mouseup', () => {
-      isSpaying = false;
-    });
-    
-    canvas.addEventListener('mouseleave', () => {
-      isSpaying = false;
-    });
-    
-    canvas.addEventListener('mousemove', e => {
-      if (!isSpaying) return;
-      
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      for (let i = 0; i < dotsPerFrame; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = Math.random() * sprayRadius;
-        const dotX = x + Math.cos(angle) * distance;
-        const dotY = y + Math.sin(angle) * distance;
-        const dotSize = Math.random() * 2 + 1;
-        
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.random() * 0.7 + 0.3})`;
-        ctx.fill();
-      }
-    });
-  </script>
-</body>
-</html>
-```
+---
 
 ## What You Learned
 
-| Concept | What It Does |
-|---------|-----------|
-| `getContext('2d')` | Returns the 2D drawing context object with all canvas methods |
-| `beginPath()` | Starts a new drawing path |
-| `moveTo(x, y)` | Moves the brush position without drawing |
-| `lineTo(x, y)` | Draws a line from the current position to (x, y) |
-| `stroke()` | Draws the outline of the current path |
-| `strokeRect()` | Draws an outlined rectangle |
-| `ellipse()` | Draws an oval or circle using center and radii |
-| `getImageData()` | Captures all pixel data from a canvas region |
-| `putImageData()` | Restores captured pixel data back to the canvas |
-| `save() / restore()` | Saves and restores the drawing state (colors, widths, etc.) |
-| `getBoundingClientRect()` | Gets screen coordinates of the canvas element |
-| `toDataURL()` | Exports canvas as a PNG data URL for saving |
+| Concept | What It Does | Real-World Use |
+|---------|-------------|----------------|
+| `getContext('2d')` | Returns the 2D drawing context | Foundation of canvas-based apps |
+| `beginPath()` / `moveTo()` / `lineTo()` | Builds a path without drawing it | Vector graphics, custom shapes |
+| `stroke()` / `fill()` | Renders the path to pixels | Every shape in every canvas app |
+| `strokeRect()` / `fillRect()` | Draws rectangles without explicit paths | UI primitives, game tiles |
+| `arc()` / `ellipse()` | Draws circles and ovals | Gauges, charts, game elements |
+| `getImageData()` / `putImageData()` | Captures/restores pixel data | Undo/redo, image filters, flood fill |
+| `save()` / `restore()` | Stacks and restores drawing state | Temporary style changes |
+| `getBoundingClientRect()` | Converts screen pixels to canvas pixels | Correct coordinate mapping |
+| `toDataURL()` | Exports canvas as image data URL | Download, share, thumbnails |
+
+### Real-World Connections
+
+- **Figma, Photoshop (web)** use canvas for rendering. Their undo systems work exactly like this app's — snapshots.
+- **Game engines** (Phaser, PixiJS) are canvas abstractions. They manage the game loop, sprite rendering, and transforms so you don't have to.
+- **Chart libraries** (Chart.js, Highcharts) use canvas for performance when rendering hundreds of data points.
+- **Image editors** use the `ImageData` pixel manipulation pattern for filters, blend modes, and flood fill.
 
 ## Building with Claude
 
 - "Add a color-by-numbers mode where I can click regions and they auto-fill with the selected color."
 - "Create a shape stamp tool that lets me click to place pre-drawn shapes like stars, hearts, and arrows."
-- "Build a layers feature where I can have multiple transparent drawing layers and toggle them on/off."
-- "Add a blur tool that smooths out colors in a circular area, like a smudge brush."
-- "Implement a gradient tool that fills an area with a smooth color transition between two selected colors."
+- "Add zoom and pan: Ctrl+scroll to zoom, Space+drag to pan. Make sure drawing still works correctly when zoomed."
+- "Add a gradient fill tool that fills the clicked region with a linear gradient between two colors I choose."
+- "Implement layers: draw on separate surfaces that composite together when rendered."

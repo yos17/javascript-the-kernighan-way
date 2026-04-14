@@ -1,6 +1,33 @@
 # Chapter 6: The DOM
 
-The DOM (Document Object Model) is the browser's live representation of your HTML page. JavaScript can reach into the DOM to create new elements, move them around, change their text, and delete them — all without reloading the page. Everything you see on screen is a node in the DOM tree, and you have full control over it.
+## Why the DOM Exists
+
+When a browser loads an HTML page, it doesn't just render pixels — it builds a **tree** of objects in memory, one object per HTML element. That tree is the Document Object Model (DOM). JavaScript can reach into that tree at any time to read, change, add, or remove elements without reloading the page.
+
+This is the foundation of every interactive web page. When you click a button and new content appears, JavaScript is modifying the DOM tree, and the browser reflects those changes on screen immediately.
+
+Here's what the DOM tree looks like for a simple page:
+
+```
+document
+└── html
+    ├── head
+    │   └── title: "To-Do List"
+    └── body
+        ├── h1: "✅ To-Do List"
+        ├── div.input-row
+        │   ├── input#taskInput
+        │   └── button#addBtn: "Add"
+        ├── div.filters
+        │   ├── button[data-filter="all"]: "All"
+        │   ├── button[data-filter="active"]: "Active"
+        │   └── button[data-filter="done"]: "Done"
+        └── ul#list
+            ├── li[data-id="1"] ← dynamically added
+            └── li[data-id="2"] ← dynamically added
+```
+
+The `ul#list` starts empty. Every time you add a task, JavaScript creates a new `li` node and attaches it to the tree. The browser then renders it. That's the whole mechanism.
 
 ## The Program: Dynamic To-Do List
 
@@ -8,244 +35,74 @@ A fully functional task manager where you can add, complete, and remove tasks, f
 
 ## The Complete Program
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>To-Do List</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; justify-content: center; padding: 30px 16px; }
-  .app { width: 100%; max-width: 520px; }
-  h1 { font-size: 1.6rem; margin-bottom: 16px; color: #1a1a2e; }
-
-  .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
-  .input-row input { flex: 1; padding: 12px 14px; border: 2px solid #ddd; border-radius: 10px; font-size: 1rem; outline: none; transition: border-color 0.2s; }
-  .input-row input:focus { border-color: #6c5ce7; }
-  .input-row button { padding: 12px 20px; border: none; border-radius: 10px; background: #6c5ce7; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; }
-  .input-row button:hover { background: #5b4cdb; }
-
-  .filters { display: flex; gap: 6px; margin-bottom: 14px; }
-  .filters button { padding: 6px 14px; border: 2px solid #ddd; border-radius: 20px; background: #fff; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
-  .filters button.active { border-color: #6c5ce7; background: #6c5ce7; color: #fff; }
-
-  .count { font-size: 0.85rem; color: #888; margin-bottom: 10px; }
-
-  #list { list-style: none; }
-  #list li { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #fff; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); cursor: grab; transition: opacity 0.2s, transform 0.15s; }
-  #list li.dragging { opacity: 0.4; transform: scale(0.97); }
-  #list li.done span { text-decoration: line-through; color: #aaa; }
-
-  #list li input[type="checkbox"] { width: 20px; height: 20px; accent-color: #6c5ce7; cursor: pointer; flex-shrink: 0; }
-  #list li span { flex: 1; font-size: 0.95rem; word-break: break-word; }
-  #list li button { background: none; border: none; color: #ccc; font-size: 1.2rem; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
-  #list li button:hover { color: #e74c3c; }
-
-  .empty { text-align: center; padding: 30px; color: #bbb; font-size: 0.95rem; }
-</style>
-</head>
-<body>
-
-<div class="app">
-  <h1>✅ To-Do List</h1>
-
-  <div class="input-row">
-    <input type="text" id="taskInput" placeholder="What needs to be done?">
-    <button id="addBtn">Add</button>
-  </div>
-
-  <div class="filters">
-    <button class="active" data-filter="all">All</button>
-    <button data-filter="active">Active</button>
-    <button data-filter="done">Done</button>
-  </div>
-
-  <div class="count" id="count"></div>
-  <ul id="list"></ul>
-</div>
-
-<script>
-let tasks = [];
-let filter = 'all';
-let dragIdx = null;
-
-const input = document.getElementById('taskInput');
-const list = document.getElementById('list');
-const countEl = document.getElementById('count');
-
-// Add task
-document.getElementById('addBtn').addEventListener('click', addTask);
-input.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
-
-function addTask() {
-  const text = input.value.trim();
-  if (!text) return;
-  tasks.push({ text, done: false, id: Date.now() });
-  input.value = '';
-  render();
-}
-
-// Filter buttons — event delegation on parent
-document.querySelector('.filters').addEventListener('click', e => {
-  if (e.target.tagName !== 'BUTTON') return;
-  filter = e.target.dataset.filter;
-  document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
-  e.target.classList.add('active');
-  render();
-});
-
-// List clicks — event delegation
-list.addEventListener('click', e => {
-  const li = e.target.closest('li');
-  if (!li) return;
-  const id = Number(li.dataset.id);
-
-  if (e.target.type === 'checkbox') {
-    const task = tasks.find(t => t.id === id);
-    task.done = e.target.checked;
-    render();
-  } else if (e.target.tagName === 'BUTTON') {
-    tasks = tasks.filter(t => t.id !== id);
-    render();
-  }
-});
-
-// Drag-and-drop reordering
-list.addEventListener('dragstart', e => {
-  const li = e.target.closest('li');
-  if (!li) return;
-  dragIdx = [...list.children].indexOf(li);
-  li.classList.add('dragging');
-});
-
-list.addEventListener('dragover', e => {
-  e.preventDefault();
-  const li = e.target.closest('li');
-  if (!li) return;
-  const rect = li.getBoundingClientRect();
-  const mid = rect.top + rect.height / 2;
-  const dropIdx = [...list.children].indexOf(li);
-  if (e.clientY < mid && dropIdx < dragIdx) {
-    list.insertBefore(list.children[dragIdx], li);
-    dragIdx = dropIdx;
-  } else if (e.clientY > mid && dropIdx > dragIdx) {
-    list.insertBefore(list.children[dragIdx], li.nextSibling);
-    dragIdx = dropIdx;
-  }
-});
-
-list.addEventListener('dragend', e => {
-  e.target.closest('li')?.classList.remove('dragging');
-  // Sync task order from DOM
-  const ids = [...list.children].map(li => Number(li.dataset.id));
-  tasks = ids.map(id => tasks.find(t => t.id === id));
-  dragIdx = null;
-});
-
-function render() {
-  const visible = tasks.filter(t =>
-    filter === 'all' ? true : filter === 'done' ? t.done : !t.done
-  );
-
-  const active = tasks.filter(t => !t.done).length;
-  countEl.textContent = `${active} task${active !== 1 ? 's' : ''} remaining`;
-
-  list.innerHTML = '';
-  if (visible.length === 0) {
-    list.innerHTML = `<div class="empty">${tasks.length === 0 ? 'Add your first task above!' : 'No tasks match this filter.'}</div>`;
-    return;
-  }
-
-  for (const task of visible) {
-    const li = document.createElement('li');
-    li.dataset.id = task.id;
-    li.draggable = true;
-    if (task.done) li.classList.add('done');
-
-    li.innerHTML = `
-      <input type="checkbox" ${task.done ? 'checked' : ''}>
-      <span>${task.text}</span>
-      <button title="Remove">✕</button>
-    `;
-    list.appendChild(li);
-  }
-}
-
-// Start with sample tasks
-['Learn JavaScript objects', 'Build a to-do app', 'Celebrate 🎉'].forEach(text =>
-  tasks.push({ text, done: false, id: Date.now() + Math.random() })
-);
-render();
-</script>
-</body>
-</html>
-```
+See `todo_list.html` for the full source. Key concepts are explained below.
 
 ## How It Works
 
 ### Selecting Elements
 
-The program grabs references to key elements right away using `getElementById`:
+Before you can manipulate an element, you need a JavaScript reference to it:
 
-```js
+```javascript
+// By ID — fastest, returns one element or null
 const input = document.getElementById('taskInput');
-const list = document.getElementById('list');
-const countEl = document.getElementById('count');
+
+// By CSS selector — flexible, returns first match
+const filters = document.querySelector('.filters');
+
+// By CSS selector — all matches, returns a NodeList (array-like)
+const buttons = document.querySelectorAll('.filters button');
 ```
 
-You can also use `querySelector` with any CSS selector — the filter buttons use `document.querySelector('.filters')` to find the container. `querySelectorAll` returns all matches as a NodeList you can loop over.
+**Why use `getElementById` when `querySelector` does everything?** Speed and clarity. `getElementById` is faster and signals intent ("I'm looking for this specific element"). Use `querySelector` when you need CSS selector flexibility.
 
-### createElement and innerHTML
+### createElement and Building New Nodes
 
-New tasks are built with `createElement`:
+New HTML elements are created in memory before being attached to the page:
 
-```js
+```javascript
+// 1. Create the element — it doesn't appear on screen yet
 const li = document.createElement('li');
-li.dataset.id = task.id;
+
+// 2. Configure it
+li.dataset.id = task.id;   // sets data-id attribute
 li.draggable = true;
-```
 
-The element exists in memory until you attach it to the page. We set its inner HTML with a template literal containing the checkbox, text span, and remove button, then append it to the list. For clearing the list before re-render, `list.innerHTML = ''` wipes all children in one shot.
+// 3. Set its contents
+li.innerHTML = `
+  <input type="checkbox" ${task.done ? 'checked' : ''}>
+  <span>${task.text}</span>
+  <button title="Remove">✕</button>
+`;
 
-### appendChild and the DOM Tree
-
-```js
+// 4. Attach it — NOW it appears on screen
 list.appendChild(li);
 ```
 
-This attaches the `<li>` as the last child of `<ul id="list">`. Each call adds one node to the tree. The browser repaints after the script finishes, so building many elements in a loop is fine — they all appear at once.
+**Why the two-step create/attach pattern?** You can build complex elements and set all their properties before touching the live page. This is more predictable and often faster than modifying elements after they're already visible.
 
-### classList
+### Event Delegation: One Listener for Many Elements
 
-CSS classes control visual state. When a task is marked done:
+Here's the naive approach to handling clicks on 20 to-do items:
 
-```js
-if (task.done) li.classList.add('done');
+```javascript
+// Bad — wires up a new listener every time you add a task
+function addTask(text) {
+  const li = document.createElement('li');
+  li.querySelector('button').addEventListener('click', () => {
+    // remove this task
+  });
+}
 ```
 
-The CSS rule `#list li.done span { text-decoration: line-through; color: #aaa; }` handles the visual change. You can also use `classList.remove()`, `classList.toggle()`, and `classList.contains()`. This is cleaner than manipulating the full `className` string.
+This works, but it creates a new listener for every task. With 100 tasks, that's 100 listeners. And when you re-render, you have to wire them all up again.
 
-### dataset Attributes
+**Event delegation** solves this with one listener on the parent, which catches clicks from all children:
 
-Custom data lives on elements via `data-*` attributes:
-
-```js
-li.dataset.id = task.id;    // sets data-id="12345"
-// later:
-const id = Number(li.dataset.id);  // reads it back
-```
-
-The filter buttons use `data-filter="all"`, `data-filter="active"`, and `data-filter="done"`. When clicked, `e.target.dataset.filter` tells us which filter was chosen. This avoids messy if/else chains checking button text.
-
-### Event Delegation
-
-Instead of attaching a click handler to every checkbox and every remove button, one listener on the parent `<ul>` handles everything:
-
-```js
+```javascript
+// Good — one listener handles all tasks, present and future
 list.addEventListener('click', e => {
-  const li = e.target.closest('li');
+  const li = e.target.closest('li');   // find the task that was clicked
   if (!li) return;
   const id = Number(li.dataset.id);
 
@@ -257,95 +114,150 @@ list.addEventListener('click', e => {
 });
 ```
 
-This works because of **event bubbling** — when you click a checkbox inside a `<li>` inside a `<ul>`, the click event fires on the checkbox first, then bubbles up through `<li>` to `<ul>`. The `e.target` tells you what was actually clicked, and `closest('li')` walks up the tree to find the parent list item.
+This works because of **event bubbling**: when you click a checkbox inside a `<li>` inside a `<ul>`, the click fires on the checkbox and then travels *up* through the tree:
 
-The filter buttons use the same pattern — one listener on `.filters` instead of three separate listeners.
-
-### Drag-and-Drop Reordering
-
-HTML5 drag-and-drop uses four events. First, make elements draggable:
-
-```js
-li.draggable = true;
+```
+click on checkbox
+        ↓  (event fires here first)
+      <li>
+        ↓  (bubbles up)
+      <ul>  ← our listener catches it here
+        ↓
+     <div>
+        ↓
+     <body>
 ```
 
-Then handle the lifecycle. `dragstart` fires when the user begins dragging — we record which index they grabbed. `dragover` fires continuously as they drag over other items — we must call `e.preventDefault()` to allow dropping, and we use the mouse position relative to each item's midpoint to decide whether to insert above or below. `dragend` fires when they release — we sync the new DOM order back to our `tasks` array.
+`e.target` tells you what was originally clicked. `closest('li')` walks *up* from `e.target` to find the nearest `<li>` ancestor, giving you the task container regardless of what specific element inside it was clicked.
 
-```js
-list.addEventListener('dragover', e => {
-  e.preventDefault();
-  const li = e.target.closest('li');
-  if (!li) return;
-  const rect = li.getBoundingClientRect();
-  const mid = rect.top + rect.height / 2;
-  // insert above or below based on mouse position
-});
+**Why is event delegation better?**
+1. **Performance**: One listener instead of N listeners.
+2. **Works for dynamic content**: The `<ul>` listener catches clicks on tasks added *after* the listener was created.
+3. **Less cleanup**: When tasks are deleted, there are no lingering listeners to remove.
+
+### classList: Managing Visual State
+
+CSS classes are the right tool for showing/hiding or styling based on state. JavaScript should only decide *what state* to apply — CSS decides *how it looks*:
+
+```javascript
+// Wrong — JavaScript doing CSS's job
+li.style.textDecoration = 'line-through';
+li.style.color = '#aaa';
+
+// Right — JavaScript applies the class, CSS defines the style
+if (task.done) li.classList.add('done');
 ```
 
-## Try It
+Then in CSS:
+```css
+#list li.done span { text-decoration: line-through; color: #aaa; }
+```
 
-1. **Edit in place** — Double-click a task's text to replace the `<span>` with an `<input>`. When the user presses Enter or clicks away (blur), save the new text back.
+`classList` methods: `.add('x')`, `.remove('x')`, `.toggle('x')`, `.contains('x')`.
 
-2. **Priority colors** — Add a dropdown next to the input that lets you pick Low, Medium, or High priority. Store it in the task object and use a colored left border on each `<li>`.
+### dataset: Connecting DOM to Data
 
-3. **Clear completed** — Add a "Clear Done" button that removes all completed tasks at once with a confirmation.
+Custom data attributes (`data-*`) bridge the gap between HTML nodes and JavaScript data:
 
-4. **Task count animation** — When the count changes, briefly scale it up with a CSS transition to draw the eye.
+```javascript
+// Store the task's ID on the DOM element
+li.dataset.id = task.id;       // → <li data-id="1715000000">
 
-## Exercises
+// Later, read it back when the user clicks
+const id = Number(li.dataset.id);   // → 1715000000 (number)
+```
 
-**Exercise 1: Due Dates.** Add a date input next to the task input. Store the due date in each task object. Display it as small gray text on the right side of each task. Tasks past their due date should get a red background. The filter bar should get a fourth button: "Overdue".
+This is how event delegation knows *which* task was clicked — the element carries its own ID. All `data-*` values are strings, so convert to numbers with `Number()` when needed.
 
-**Exercise 2: Keyboard Navigation.** Make tasks focusable with `tabindex="0"`. Arrow Up/Down should move focus between tasks. Space should toggle done/undone. Delete should remove the focused task. When a task is removed, focus should move to the next one (or the previous if it was the last).
+### The Render Pattern
 
-**Exercise 3: LocalStorage Persistence.** Save the entire tasks array to `localStorage` every time it changes. On page load, check for saved data and restore it. Add a "Reset" button that clears localStorage and reloads with the default sample tasks. Handle the case where saved data is corrupted (wrap JSON.parse in try/catch).
+This app uses a simple pattern for keeping the DOM in sync with data:
 
-## Solutions
+1. Keep all state in a JavaScript array (`tasks`)
+2. When state changes, call `render()`
+3. `render()` wipes the old DOM and rebuilds it from current state
 
-### Solution 1: Due Dates
+```javascript
+function render() {
+  list.innerHTML = '';  // wipe everything
+  for (const task of tasks) {
+    // build and append each task
+  }
+}
+```
 
-Add this input to the `.input-row` in the HTML:
+**Why wipe and rebuild instead of updating in place?** For a small list, "destroy and redraw" is simple and correct. The alternative — surgically updating only what changed — is faster but much more complex to write correctly. (That's what React's virtual DOM does for you automatically, but it's a lot of machinery. For a to-do list, simple wins.)
+
+---
+
+## Guided Exercises
+
+### Exercise 1: Add Due Dates
+
+**The Challenge:** Tasks should have optional due dates. Overdue tasks (past their date, not done) should be highlighted in red. Add an "Overdue" filter button.
+
+**Where to start:** This touches three things: the form (new input), the data (task object), and the render (display + filtering). Which should you add first?
+
+*(Always start with data. The UI and render follow from the data model.)*
+
+---
+
+**Step 1: Add a date input to the form.**
+
+Put it next to the task text input:
 
 ```html
 <input type="date" id="dueInput" style="padding:12px 10px; border:2px solid #ddd; border-radius:10px;">
 ```
 
-Modify the JavaScript:
+**What do you have now?** A date picker the user can interact with. No data changes yet.
 
-```js
+---
+
+**Step 2: Read the date in `addTask()`.**
+
+Find `addTask()` and add the date to the task object:
+
+```javascript
 function addTask() {
   const text = input.value.trim();
   if (!text) return;
-  const due = document.getElementById('dueInput').value || null;
+  const due = document.getElementById('dueInput').value || null;  // null if empty
   tasks.push({ text, done: false, id: Date.now(), due });
   input.value = '';
   document.getElementById('dueInput').value = '';
   render();
 }
+```
 
+**Think about it:** `due` will be a string like `"2025-12-31"`. Dates stored this way sort alphabetically — and alphabetical order is the same as chronological order for YYYY-MM-DD format. Handy!
+
+---
+
+**Step 3: Display the date and highlight overdue tasks.**
+
+In `render()`, compute today's date, then check each task:
+
+```javascript
 function render() {
-  const today = new Date().toISOString().split('T')[0];
-  const visible = tasks.filter(t => {
-    if (filter === 'all') return true;
-    if (filter === 'done') return t.done;
-    if (filter === 'active') return !t.done;
-    if (filter === 'overdue') return !t.done && t.due && t.due < today;
-    return true;
-  });
-
-  // ... existing count logic ...
+  const today = new Date().toISOString().split('T')[0]; // → "2025-01-15"
 
   for (const task of visible) {
     const li = document.createElement('li');
     li.dataset.id = task.id;
     li.draggable = true;
     if (task.done) li.classList.add('done');
+
+    // Overdue = has a due date, not done, and the date is in the past
     if (!task.done && task.due && task.due < today) {
       li.style.background = '#fff0f0';
       li.style.borderLeft = '4px solid #e74c3c';
     }
 
-    const dueText = task.due ? `<small style="color:#999;margin-left:auto">${task.due}</small>` : '';
+    const dueText = task.due
+      ? `<small style="color:#999;margin-left:auto">${task.due}</small>`
+      : '';
+
     li.innerHTML = `
       <input type="checkbox" ${task.done ? 'checked' : ''}>
       <span>${task.text}</span>
@@ -357,62 +269,151 @@ function render() {
 }
 ```
 
-Add a fourth filter button in the HTML:
+**What's the string comparison doing?** `task.due < today` compares `"2025-01-10"` < `"2025-01-15"` as strings. This works because ISO date strings sort correctly as text.
+
+---
+
+**Step 4: Add the "Overdue" filter button.**
+
+Add the button in the HTML filters div:
 
 ```html
 <button data-filter="overdue">Overdue</button>
 ```
 
-### Solution 2: Keyboard Navigation
+Then update the filter logic in `render()`:
 
-Replace the list event delegation and add keyboard handling:
+```javascript
+const visible = tasks.filter(t => {
+  if (filter === 'all') return true;
+  if (filter === 'done') return t.done;
+  if (filter === 'active') return !t.done;
+  if (filter === 'overdue') return !t.done && t.due && t.due < today;
+  return true;
+});
+```
 
-```js
+The filter click handler already exists (event delegation on `.filters`) — it reads `data-filter` from whichever button was clicked, so the "Overdue" button works automatically once you add it.
+
+---
+
+### Exercise 2: Keyboard Navigation
+
+**The Challenge:** Make tasks focusable. Arrow Up/Down moves focus between tasks. Space toggles done. Delete removes the focused task (moving focus to the next one).
+
+**Where to start:** Focus and keyboard navigation require two things: making elements focusable (via `tabindex`), and responding to key events. Start with focusability.
+
+---
+
+**Step 1: Make each task focusable.**
+
+In `render()`, when building each `li`, add:
+
+```javascript
+li.setAttribute('tabindex', '0');
+```
+
+**Test it:** Tab through the page. The tasks should now receive focus (usually shown with an outline). You don't need to style this yet.
+
+---
+
+**Step 2: Add a keydown listener on the list.**
+
+Using delegation again — one listener on `#list` handles keys for all tasks:
+
+```javascript
 list.addEventListener('keydown', e => {
   const li = e.target.closest('li');
   if (!li) return;
   const id = Number(li.dataset.id);
-
-  if (e.key === ' ') {
-    e.preventDefault();
-    const task = tasks.find(t => t.id === id);
-    if (task) { task.done = !task.done; render(); }
-    // Re-focus the same task after re-render
-    const refocused = list.querySelector(`[data-id="${id}"]`);
-    if (refocused) refocused.focus();
-  } else if (e.key === 'Delete' || e.key === 'Backspace') {
-    e.preventDefault();
-    const next = li.nextElementSibling || li.previousElementSibling;
-    tasks = tasks.filter(t => t.id !== id);
-    render();
-    if (next) {
-      const refocused = list.querySelector(`[data-id="${next.dataset.id}"]`);
-      if (refocused) refocused.focus();
-    }
-  } else if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    const next = li.nextElementSibling;
-    if (next) next.focus();
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    const prev = li.previousElementSibling;
-    if (prev) prev.focus();
-  }
+  // handle keys here
 });
-
-// In the render function, add tabindex to each li:
-// li.setAttribute('tabindex', '0');
 ```
 
-### Solution 3: LocalStorage Persistence
+**Think about it:** What should `ArrowDown` do? It should move focus to `li.nextElementSibling`. What about `ArrowUp`? The previous sibling. Let's code it:
 
-```js
+---
+
+**Step 3: Handle arrow keys.**
+
+```javascript
+if (e.key === 'ArrowDown') {
+  e.preventDefault();  // prevent page scroll
+  const next = li.nextElementSibling;
+  if (next) next.focus();
+} else if (e.key === 'ArrowUp') {
+  e.preventDefault();
+  const prev = li.previousElementSibling;
+  if (prev) prev.focus();
+}
+```
+
+**What about Space and Delete?** For Space (toggle), you need to find the task in the array, flip its `done`, and re-render. After re-render, the `li` is a new DOM element — so you'll need to re-focus by finding the element with `data-id`:
+
+```javascript
+} else if (e.key === ' ') {
+  e.preventDefault();
+  const task = tasks.find(t => t.id === id);
+  if (task) { task.done = !task.done; render(); }
+  // Re-focus after re-render
+  list.querySelector(`[data-id="${id}"]`)?.focus();
+} else if (e.key === 'Delete') {
+  e.preventDefault();
+  const next = li.nextElementSibling || li.previousElementSibling;
+  tasks = tasks.filter(t => t.id !== id);
+  render();
+  // Focus the neighbor, if any
+  if (next) list.querySelector(`[data-id="${next.dataset.id}"]`)?.focus();
+}
+```
+
+**The complete keyboard handler adds these four cases.** Notice that `?.focus()` uses optional chaining — if `querySelector` returns `null`, the `.focus()` is skipped safely instead of throwing an error.
+
+---
+
+### Exercise 3: LocalStorage Persistence
+
+**The Challenge:** Save tasks to `localStorage` so they survive a page reload. Load them on startup. Add a "Reset" button that clears storage and restores sample tasks.
+
+**Where to start:** `localStorage` stores strings only. JavaScript objects need to be serialized with `JSON.stringify` before saving and deserialized with `JSON.parse` after loading.
+
+---
+
+**Step 1: Write a save function.**
+
+```javascript
 const STORAGE_KEY = 'todo-app-tasks';
 
 function saveTasks() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 }
+```
 
+Call `saveTasks()` at the end of any function that modifies `tasks`: `addTask()`, the click handler for checkboxes, the click handler for remove buttons.
+
+**Think about it:** Is there a better way to do this automatically, without adding `saveTasks()` to every function that changes state?
+
+---
+
+**Step 2: Wrap `render()` to auto-save.**
+
+Every state change calls `render()`. So wrapping render is a clean way to auto-save:
+
+```javascript
+const _render = render;  // save the original
+render = function() {
+  _render();      // run the original render
+  saveTasks();    // then save
+};
+```
+
+Now you only need to add saving in one place.
+
+---
+
+**Step 3: Load tasks on startup.**
+
+```javascript
 function loadTasks() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -421,32 +422,18 @@ function loadTasks() {
       return true;
     }
   } catch {
+    // JSON.parse can throw if stored data is corrupted
     localStorage.removeItem(STORAGE_KEY);
   }
   return false;
 }
+```
 
-// Wrap render to auto-save
-const baseRender = render;
-render = function() {
-  baseRender();
-  saveTasks();
-};
+Replace the sample tasks initialization at the bottom:
 
-// Add reset button in the HTML after the filters div:
-// <button id="resetBtn" style="...">Reset</button>
-
-document.getElementById('resetBtn')?.addEventListener('click', () => {
-  localStorage.removeItem(STORAGE_KEY);
-  tasks = [];
-  ['Learn JavaScript objects', 'Build a to-do app', 'Celebrate 🎉'].forEach(text =>
-    tasks.push({ text, done: false, id: Date.now() + Math.random() })
-  );
-  render();
-});
-
-// At startup, try loading saved data
+```javascript
 if (!loadTasks()) {
+  // No saved data — start with sample tasks
   ['Learn JavaScript objects', 'Build a to-do app', 'Celebrate 🎉'].forEach(text =>
     tasks.push({ text, done: false, id: Date.now() + Math.random() })
   );
@@ -454,22 +441,29 @@ if (!loadTasks()) {
 render();
 ```
 
+**Why the try/catch?** `localStorage` data can be corrupted (browser bug, user edited it manually). `JSON.parse` throws on invalid JSON. Always wrap it.
+
+---
+
 ## What You Learned
 
-| Concept | What It Does |
-|---------|-------------|
-| `document.getElementById` | Finds a single element by its `id` attribute |
-| `document.querySelector` | Finds the first element matching any CSS selector |
-| `document.querySelectorAll` | Returns all matching elements as a NodeList |
-| `createElement` | Creates a new DOM node in memory (not yet on screen) |
-| `appendChild` | Attaches a node as the last child of a parent element |
-| `innerHTML` | Gets or sets the HTML content of an element as a string |
-| `classList` | Adds, removes, or toggles CSS classes on an element |
-| `dataset` | Reads and writes `data-*` attributes as a JavaScript object |
-| Event delegation | One listener on a parent handles events for all children |
-| `e.target.closest()` | Walks up the DOM tree to find the nearest matching ancestor |
-| `draggable` | HTML attribute that makes an element draggable |
-| `getBoundingClientRect()` | Returns an element's size and position on screen |
+| Concept | What It Does | Real-World Use |
+|---------|-------------|----------------|
+| `getElementById` / `querySelector` | Gets a reference to a DOM element | Every UI framework still does this under the hood |
+| `createElement` | Creates a new element in memory | React's `createElement` is literally the same idea |
+| `appendChild` | Attaches a node to the page | React's `render()` does this for you |
+| `innerHTML` | Sets HTML content as a string | Template engines (Handlebars, EJS) work this way |
+| `classList` | Toggles CSS classes to reflect state | CSS-in-JS libraries do the same thing differently |
+| `dataset` | Stores custom data on DOM elements | Used to pass context from HTML to JavaScript |
+| Event delegation | One parent listener handles all child events | React uses synthetic events this way for performance |
+| `e.target.closest()` | Walks up the tree to find an ancestor | Used in virtually all event delegation patterns |
+| `getBoundingClientRect()` | Gets size and position of an element | Used for drag-and-drop, tooltips, scroll triggers |
+
+### Real-World Connections
+
+- **jQuery** was hugely popular for exactly this — it wrapped `querySelector`, `classList`, `addEventListener`, and `createElement` in simpler methods. You just learned what jQuery did.
+- **React** adds a virtual DOM layer on top. Instead of manually calling `innerHTML = ''` and rebuilding, you describe what the output should look like and React figures out the minimal DOM changes. The underlying `createElement` and `appendChild` still happen — React just manages them.
+- **Alpine.js and Vue** add a reactive layer: instead of calling `render()` manually when data changes, you declare data as reactive and the framework calls render for you. Same concept, automatic.
 
 ## Building with Claude
 

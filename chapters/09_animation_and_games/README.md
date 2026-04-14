@@ -1,358 +1,440 @@
 # Chapter 9: Animation and Games
 
-Games are one of the best ways to learn programming. A game requires you to understand the core mechanics of computer science: state management, collision detection, event handling, and the game loop itself. In this chapter, we'll build Breakout—a classic arcade game—from scratch using the Canvas API and modern JavaScript.
+## Why Games Teach Programming
 
-Game development teaches you how computers actually work. Instead of writing business logic or data processing code, you're writing code that must run 60 times per second, manage multiple moving objects, detect collisions between them, respond to user input instantly, and maintain consistent state across all these moving parts. These are the fundamental challenges that show up everywhere in programming, from web servers to operating systems.
+A game requires you to confront the core challenges of computer science all at once: managing state that changes 60 times per second, detecting when objects collide, responding to user input without lag, and keeping all these moving parts coherent. These aren't game-specific problems. They're the same problems server code faces under load, the same problems UI frameworks solve for animation, the same problems operating systems solve for concurrency.
 
-By the end of this chapter, you'll understand requestAnimationFrame, collision detection algorithms, state machines, and how to build smooth, responsive interactive applications. These concepts extend far beyond games—they're essential for any interactive software.
+Games are also unforgiving. If your to-do list has a bug, the task looks wrong. If your game has a bug, the ball phases through the paddle and the game is unplayable. The immediate, visual feedback makes bugs obvious and fixes satisfying.
 
 ## The Program: Breakout
 
-Breakout is a game where you control a paddle at the bottom of the screen and bounce a ball upward to break colored bricks at the top. As you break bricks, you score points. If the ball falls off the bottom of the screen, you lose a life. Break all the bricks to advance to the next level, where the ball moves faster and more bricks appear.
+A classic arcade game: paddle at the bottom, ball bouncing upward, bricks at the top to destroy. Arrow keys or mouse control the paddle. Break all bricks to advance to the next level. Lose all lives to end the game.
 
-[Open breakout.html](breakout.html) to play the game.
-
-The game features keyboard control (arrow keys), mouse control, smooth animation at 60fps, realistic ball physics, colorful brick arrangements that change per level, and progressive difficulty. It's a complete, polished game in under 250 lines of JavaScript.
+[Open breakout.html](breakout.html) to play.
 
 ## How It Works
 
 ### The Game Loop
 
-The heart of any game is the game loop—a function that runs repeatedly to update game state and redraw the screen. In browsers, we use `requestAnimationFrame` instead of `setInterval` because it synchronizes with the monitor's refresh rate, usually 60 times per second.
+Every game runs a loop that repeats as fast as the screen refreshes — typically 60 times per second. Each iteration:
+1. Update game state (move objects, check collisions)
+2. Draw everything to the canvas
+3. Schedule the next iteration
+
+```
+requestAnimationFrame calls gameLoop
+        ↓
+   update()  ← move ball, check collisions, update score
+        ↓
+   draw()    ← clear canvas, draw bricks, paddle, ball
+        ↓
+requestAnimationFrame(gameLoop)  ← schedule next frame
+        ↓
+   (16.7ms later) ← browser calls gameLoop again
+```
+
+The code:
 
 ```javascript
 const gameLoop = () => {
-    update();  // Change positions, check collisions
-    draw();    // Render everything to the canvas
-    requestAnimationFrame(gameLoop);
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
 };
 
-gameLoop();
+gameLoop();  // start the loop
 ```
 
-Why is `requestAnimationFrame` better than `setInterval`? First, it syncs with the display—drawing happens when the monitor is ready to show the new frame, eliminating visual tearing. Second, it automatically pauses when the tab is hidden, saving CPU and battery. Third, it's what the browser optimizes for, so animations are smoother.
+**Why `requestAnimationFrame` instead of `setInterval`?**
 
-Without a proper game loop, games feel janky and unresponsive. The loop creates the illusion of continuous motion by redrawing everything many times per second.
+`setInterval(gameLoop, 16)` would also run ~60 times per second. But `requestAnimationFrame` is better for three reasons:
 
-### Drawing on Canvas
+1. **Sync with display**: It fires right before the browser paints a new frame. `setInterval` fires on a timer that may not align with screen refreshes, causing **tearing** (partial old frame + partial new frame visible simultaneously).
 
-The Canvas API gives us a 2D drawing surface. We get a context object that has methods for drawing rectangles, circles, lines, and more.
+2. **Pause when hidden**: If the user switches tabs, `requestAnimationFrame` stops firing. `setInterval` keeps running, wasting CPU and causing a "catch-up" explosion of updates when the tab is refocused.
+
+3. **Browser-optimized**: The browser can batch, throttle, and schedule these callbacks for maximum efficiency.
+
+### Drawing on Canvas (Review from Chapter 8)
 
 ```javascript
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Draw a rectangle
+// Every frame: clear, then redraw
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+// Draw a brick
 ctx.fillStyle = '#FF6B6B';
-ctx.fillRect(x, y, width, height);
+ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
 
-// Draw a circle
-ctx.fillStyle = '#FFE66D';
+// Draw the ball (a circle)
 ctx.beginPath();
-ctx.arc(x, y, radius, 0, Math.PI * 2);
+ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+ctx.fillStyle = '#FFE66D';
 ctx.fill();
-
-// Add a shadow/glow
-ctx.shadowColor = 'rgba(255, 230, 109, 0.8)';
-ctx.shadowBlur = 20;
 ```
 
-The key insight is that every frame, we clear the canvas and redraw everything. This happens so fast (60 times per second) that it looks like continuous motion. Each frame is a new "snapshot" of the game world.
+The key insight: **you redraw the entire scene every frame**. This sounds wasteful, but it's the right approach. Incremental updates ("erase just the ball's old position") are error-prone. Full redraw is simple and correct.
 
-### Collision Detection
+### Ball Velocity and Physics
 
-The game uses Axis-Aligned Bounding Box (AABB) collision detection. The idea is simple: treat every game object as a rectangle (or in the case of the ball, a circle). An object collides with another if their rectangular bounds overlap.
+The ball moves by adding its velocity to its position each frame:
 
 ```javascript
-const aabbCollision = (circle, rect) => {
-    // Find the closest point on the rectangle to the circle's center
-    const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.width));
-    const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.height));
-
-    // Calculate distance between circle center and closest point
-    const dx = circle.x - closestX;
-    const dy = circle.y - closestY;
-
-    // Collision occurs if distance is less than radius
-    return dx * dx + dy * dy < circle.radius * circle.radius;
-};
+ball.x += ball.dx;  // dx = horizontal velocity (pixels per frame)
+ball.y += ball.dy;  // dy = vertical velocity
 ```
 
-This works by finding the point on the rectangle closest to the circle's center. If that distance is less than the ball's radius, they're colliding. We use squared distances to avoid expensive square root calculations.
-
-When a collision is detected, we need to bounce the ball. The simplest approach: reverse the ball's velocity in the appropriate direction.
+Bouncing off walls reverses the appropriate component:
 
 ```javascript
-if (aabbCollision(ball, paddle)) {
-    ball.dy = -Math.abs(ball.dy);  // Bounce up
-    // Add spin based on where the ball hit the paddle
-    const hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-    ball.dx = hitPos * ballSpeed * 1.2;
-    ball.y = paddle.y - ball.radius;  // Position ball above paddle
+if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+  ball.dx = -ball.dx;  // reverse horizontal
+}
+if (ball.y - ball.radius < 0) {
+  ball.dy = -ball.dy;  // reverse vertical (hit top wall)
 }
 ```
 
-Notice that hitting the paddle on the left side gives the ball leftward velocity, and hitting on the right gives it rightward velocity. This makes the game feel responsive to player skill.
+**Visual**:
+```
+  ball.dy = -5  (moving up)
+       ↓
+   hits top wall
+       ↓
+  ball.dy = +5  (now moving down)
+```
 
-### Keyboard and Mouse Input
+When hitting the paddle, you also add "spin" — the ball's horizontal velocity changes based on where it hit the paddle:
 
-Modern games need responsive input handling. We track which keys are pressed in an object, then check that object during the update phase:
+```javascript
+const hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+// hitPos is -1 (far left) to +1 (far right)
+ball.dx = hitPos * ballSpeed * 1.2;
+ball.dy = -Math.abs(ball.dy);  // always bounce up
+```
+
+This makes skill matter: hitting with the left edge sends the ball left, right edge sends it right.
+
+### Collision Detection: AABB
+
+The game uses **Axis-Aligned Bounding Box** (AABB) collision detection. For a circle colliding with a rectangle:
+
+```
+Rectangle:
+  ┌─────────────────┐  y
+  │                 │
+  │    (cx, cy)     │  y + height
+  └─────────────────┘
+  x               x + width
+
+Ball (circle) center: (ball.x, ball.y), radius: ball.radius
+
+Step 1: Find closest point on rectangle to circle center:
+  closestX = clamp(ball.x, rect.x, rect.x + rect.width)
+  closestY = clamp(ball.y, rect.y, rect.y + rect.height)
+
+Step 2: Distance from circle center to closest point:
+  dx = ball.x - closestX
+  dy = ball.y - closestY
+
+Step 3: Collision if distance < radius:
+  dx*dx + dy*dy < ball.radius * ball.radius
+```
+
+In code:
+
+```javascript
+function aabbCollision(ball, rect) {
+  const closestX = Math.max(rect.x, Math.min(ball.x, rect.x + rect.width));
+  const closestY = Math.max(rect.y, Math.min(ball.y, rect.y + rect.height));
+  const dx = ball.x - closestX;
+  const dy = ball.y - closestY;
+  return dx * dx + dy * dy < ball.radius * ball.radius;
+}
+```
+
+**Why squared distance instead of `Math.sqrt()`?** `Math.sqrt` is expensive to compute. Comparing `dx*dx + dy*dy < r*r` is mathematically equivalent to comparing `distance < radius` but avoids the square root entirely. This matters when checking 30+ bricks every frame.
+
+### Input Handling
+
+Input is tracked in an object, not reacted to directly:
 
 ```javascript
 const keys = {};
+window.addEventListener('keydown', e => { keys[e.key] = true;  });
+window.addEventListener('keyup',   e => { keys[e.key] = false; });
 
-window.addEventListener('keydown', (e) => {
-    keys[e.key.toLowerCase()] = true;
-});
-
-window.addEventListener('keyup', (e) => {
-    keys[e.key.toLowerCase()] = false;
-});
-
-// In the update function:
-if (keys['arrowleft']) {
-    paddle.x -= paddle.speed;
-}
-if (keys['arrowright']) {
-    paddle.x += paddle.speed;
-}
+// In update() each frame:
+if (keys['ArrowLeft'])  paddle.x -= paddle.speed;
+if (keys['ArrowRight']) paddle.x += paddle.speed;
 ```
 
-For mouse control, we track the mouse position and smoothly interpolate the paddle toward it:
+**Why not move the paddle directly in the keydown listener?** The event fires once when the key is pressed, then repeatedly (keyboard repeat delay). The `keys` object approach checks the current state every frame — smooth, lag-free movement.
+
+Mouse control uses smooth interpolation:
 
 ```javascript
-canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-});
-
-// In update:
-const paddleTarget = Math.max(0, Math.min(mouseX - paddle.width / 2, canvas.width - paddle.width));
-paddle.x += (paddleTarget - paddle.x) * 0.15;  // Smooth movement
+// In update():
+const target = Math.max(0, Math.min(mouseX - paddle.width / 2, canvas.width - paddle.width));
+paddle.x += (target - paddle.x) * 0.15;  // easing
 ```
 
-The `0.15` factor creates acceleration—the paddle doesn't snap to the mouse, it follows smoothly. This feels better than instant movement.
+The `0.15` factor creates acceleration: the paddle doesn't snap to the mouse, it follows with slight lag. This feels more natural than instant movement.
 
-### Game State Management
+### Game State Machine
 
-Games have multiple states: start screen, playing, paused, game over, level complete. We track state and change how we update and draw based on it:
+```
+  'start'
+     │  press Space
+     ▼
+  'playing'
+     │  ball falls off bottom AND lives = 0   │  all bricks destroyed
+     ▼                                         ▼
+  'gameOver'                              'levelComplete'
+     │  press Space                            │  (automatically advances)
+     ▼                                         ▼
+  'start'                                   'playing' (next level)
+```
 
 ```javascript
-let gameState = 'start';  // Can be: start, playing, paused, gameOver, levelComplete
+let gameState = 'start';
 
 const update = () => {
-    if (gameState !== 'playing') return;  // Only update when playing
-    // ... collision detection, movement, etc.
+  if (gameState !== 'playing') return;  // guard: only update when playing
+  // ... physics, collision ...
 };
 
 const draw = () => {
-    // ... draw game objects ...
-
-    if (gameState === 'start') {
-        ctx.fillText('BREAKOUT', canvas.width / 2, canvas.height / 2);
-        ctx.fillText('Press SPACE to start', canvas.width / 2, canvas.height / 2 + 40);
-    }
-
-    if (gameState === 'gameOver') {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
-    }
+  // ... draw game objects ...
+  if (gameState === 'start')    drawOverlay('BREAKOUT', 'Press SPACE to start');
+  if (gameState === 'gameOver') drawOverlay('GAME OVER', 'Press SPACE to retry');
 };
-
-window.addEventListener('keydown', (e) => {
-    if (e.key === ' ') {
-        if (gameState === 'start') gameState = 'playing';
-        if (gameState === 'gameOver') gameState = 'start';
-    }
-});
 ```
 
-This state machine pattern keeps the code organized and makes it easy to add new states later.
+The state machine keeps logic clean: `update()` does nothing unless playing. `draw()` overlays different screens based on state. Bugs stay contained — a state can only do what its code allows.
 
-### Velocity and Physics
+---
 
-The ball moves using velocity—we add its `dx` and `dy` to its position every frame:
-
-```javascript
-ball.x += ball.dx;
-ball.y += ball.dy;
-```
-
-This simple approach creates smooth motion. When the ball hits something, we reverse the appropriate velocity component. For the paddle, we also adjust `dx` based on where the ball hit, creating the illusion of "spin" or control.
-
-As levels increase, we increase `ballSpeed`, making the game harder. Ball speed in this game represents the magnitude of velocity—we scale the initial velocities by this value.
-
-## Try It
-
-Here are some ways to extend the game:
-
-1. **Add sound effects.** When the ball bounces, play a "pop" sound. When a brick breaks, play a different sound. When you lose, play a "fail" sound. Use the Web Audio API.
-
-2. **Add a paddle speedup power-up.** When you break certain bricks, drop a power-up that temporarily widens the paddle. Track which bricks have power-ups and create particles when they're collected.
-
-3. **Add a level editor.** Let players design custom brick patterns. Store patterns as arrays and load them when starting a level.
-
-## Exercises
+## Guided Exercises
 
 ### Exercise 1: Power-Ups
 
-Add power-ups that fall from broken bricks. Collecting a power-up should either widen the paddle for 5 seconds, increase ball speed, or add an extra life. Different colors for different power-ups.
+**The Challenge:** Some bricks drop a power-up when destroyed. Power-ups fall down the screen. Catching one with the paddle gives an effect: wider paddle, or an extra life.
 
-**Hints:** Create a powerUps array. When a brick breaks, randomly decide if it drops a power-up. In the draw function, render falling power-ups. In the update function, check if the paddle collides with any power-ups.
+**Where to start:** A power-up is just another object with position and velocity. Think about what data a power-up needs, then think about where it gets created.
 
-### Exercise 2: Sound Effects
+*(What array would store power-ups? What creates one? What destroys one?)*
 
-Add Web Audio API sound effects for bouncing and breaking bricks. Create simple sine-wave tones that play when these events happen.
+---
 
-**Hints:** Use `new AudioContext()` to create a context. Use `createOscillator()` and `createGain()` to create and control tones. Call `start()` and `stop()` to trigger sounds.
-
-### Exercise 3: High Score Persistence
-
-Save the high score to localStorage so it persists across page reloads. Display the high score on the start screen and game over screen.
-
-**Hints:** Use `localStorage.setItem('highScore', score)` to save and `localStorage.getItem('highScore')` to load. Check if the current score beats the high score after the game ends.
-
-## Solutions
-
-### Solution 1: Power-Ups
+**Step 1: Create the power-up data structure.**
 
 ```javascript
 let powerUps = [];
-const POWER_UP_TYPES = {
-    WIDE_PADDLE: 'wide',
-    FAST_BALL: 'fast',
-    EXTRA_LIFE: 'life'
-};
 
-const createPowerUp = (x, y) => {
-    const type = Math.random() < 0.33 ? POWER_UP_TYPES.WIDE_PADDLE : 
-                 Math.random() < 0.67 ? POWER_UP_TYPES.FAST_BALL : 
-                 POWER_UP_TYPES.EXTRA_LIFE;
-    
-    powerUps.push({
-        x, y,
-        width: 20,
-        height: 20,
-        type,
-        dy: 2
-    });
-};
+const POWER_UP_TYPES = { WIDE: 'wide', LIFE: 'life' };
 
-// In collision detection, when a brick is destroyed:
-if (Math.random() < 0.15) createPowerUp(brick.x + brick.width / 2, brick.y);
+function createPowerUp(x, y) {
+  if (Math.random() > 0.15) return;  // only 15% chance per brick
+  powerUps.push({
+    x, y,
+    width: 20, height: 10,
+    type: Math.random() < 0.5 ? POWER_UP_TYPES.WIDE : POWER_UP_TYPES.LIFE,
+    dy: 2,  // falls down
+  });
+}
+```
 
-// In update:
+**When should `createPowerUp` be called?** In the brick collision code, right after marking a brick as destroyed. What position should you pass? The brick's center.
+
+---
+
+**Step 2: Update and draw power-ups.**
+
+In `update()`, after the existing collision code:
+
+```javascript
 for (let i = powerUps.length - 1; i >= 0; i--) {
-    const pu = powerUps[i];
-    pu.y += pu.dy;
+  const pu = powerUps[i];
+  pu.y += pu.dy;
 
-    if (aabbCollision({ x: pu.x, y: pu.y, radius: 10 }, paddle)) {
-        if (pu.type === POWER_UP_TYPES.WIDE_PADDLE) {
-            paddle.width = 150;
-            setTimeout(() => { paddle.width = 100; }, 5000);
-        } else if (pu.type === POWER_UP_TYPES.EXTRA_LIFE) {
-            lives++;
-        }
-        powerUps.splice(i, 1);
-    } else if (pu.y > canvas.height) {
-        powerUps.splice(i, 1);
-    }
+  // Check if paddle catches it
+  if (aabbCollision({ x: pu.x + pu.width/2, y: pu.y + pu.height/2, radius: 10 }, paddle)) {
+    applyPowerUp(pu.type);
+    powerUps.splice(i, 1);
+  } else if (pu.y > canvas.height) {
+    powerUps.splice(i, 1);  // fell off screen
+  }
 }
+```
 
-// In draw, after drawing bricks:
+**Why iterate backwards?** When you `splice(i, 1)`, the array shrinks. If you iterate forward, you skip the element that moved into position `i` after the splice. Backwards iteration avoids this: by the time you remove element `i`, you've already processed everything after it.
+
+In `draw()`:
+
+```javascript
 for (const pu of powerUps) {
-    const colors = {
-        wide: '#FFD700',
-        fast: '#FF6B6B',
-        life: '#4ECDC4'
-    };
-    ctx.fillStyle = colors[pu.type];
-    ctx.fillRect(pu.x - pu.width / 2, pu.y - pu.height / 2, pu.width, pu.height);
+  ctx.fillStyle = pu.type === POWER_UP_TYPES.WIDE ? '#FFD700' : '#4ECDC4';
+  ctx.fillRect(pu.x, pu.y, pu.width, pu.height);
 }
 ```
 
-### Solution 2: Sound Effects
+---
+
+**Step 3: Apply the power-up effect.**
 
 ```javascript
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-const playTone = (frequency, duration, type = 'sine') => {
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-
-    osc.frequency.value = frequency;
-    osc.type = type;
-
-    gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-    osc.start(audioContext.currentTime);
-    osc.stop(audioContext.currentTime + duration);
-};
-
-// When ball bounces off paddle:
-playTone(400, 0.1);
-
-// When brick breaks:
-playTone(600, 0.15);
-
-// When ball is lost:
-playTone(200, 0.3);
-```
-
-### Solution 3: High Score Persistence
-
-```javascript
-const loadHighScore = () => {
-    const saved = localStorage.getItem('breakoutHighScore');
-    return saved ? parseInt(saved) : 0;
-};
-
-const saveHighScore = (score) => {
-    const current = loadHighScore();
-    if (score > current) {
-        localStorage.setItem('breakoutHighScore', score);
-    }
-};
-
-let highScore = loadHighScore();
-
-// At game over:
-if (gameState === 'gameOver') {
-    saveHighScore(score);
-    if (score > highScore) {
-        highScore = score;
-        // Display "NEW HIGH SCORE!" message
-    }
+function applyPowerUp(type) {
+  if (type === POWER_UP_TYPES.WIDE) {
+    paddle.width = 150;
+    setTimeout(() => { paddle.width = 100; }, 5000);  // revert after 5 seconds
+  } else if (type === POWER_UP_TYPES.LIFE) {
+    lives = Math.min(lives + 1, 5);
+  }
 }
-
-// In the draw function, display high score:
-ctx.fillText(`High Score: ${highScore}`, canvas.width - 220, 30);
 ```
+
+**Think about it:** What happens if the player gets two "wide paddle" power-ups? The first `setTimeout` will revert the paddle after 5 seconds, potentially undoing the second one. How would you fix this? *(Clear the previous timeout before setting a new one: `clearTimeout(wideTimer); wideTimer = setTimeout(...)`)*
+
+---
+
+### Exercise 2: Web Audio Sound Effects
+
+**The Challenge:** Add three sounds: a "pop" when the ball bounces off the paddle, a "crack" when a brick breaks, and a low "thud" when a life is lost.
+
+**Where to start:** Sound synthesis is Chapter 11's territory, but here's a preview. The Web Audio API can generate simple tones programmatically — no audio files needed.
+
+---
+
+**Step 1: Create the audio context (lazily).**
+
+```javascript
+let audioCtx = null;
+
+function getAudio() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  return audioCtx;
+}
+```
+
+Creating on first use (lazy init) is important — browsers require a user gesture before audio can play.
+
+---
+
+**Step 2: Write a tone generator.**
+
+```javascript
+function playTone(frequency, duration, type = 'sine') {
+  const ctx  = getAudio();
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.type = type;
+  osc.frequency.value = frequency;
+  gain.gain.setValueAtTime(0.3, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + duration);
+}
+```
+
+**How does this work?** An oscillator generates a tone at a given frequency. A gain node controls volume. `exponentialRampToValueAtTime` creates a fade — the sound starts at 0.3 and decays to near-zero over `duration` seconds. This creates a click/pluck effect rather than a constant tone.
+
+---
+
+**Step 3: Call playTone at the right moments.**
+
+Find the three places in your code:
+- Paddle collision → `playTone(400, 0.1)` (short, mid-pitch)
+- Brick destroyed  → `playTone(600, 0.15, 'square')` (brighter)
+- Life lost        → `playTone(150, 0.4)` (low, longer)
+
+**The complete picture:** Sound synthesis will be covered deeply in Chapter 11. For now, appreciate how the same audio graph pattern (oscillator → gain → destination) generates all three sounds by just changing numbers.
+
+---
+
+### Exercise 3: High Score Persistence
+
+**The Challenge:** Save the highest score to `localStorage`. Show it on the start screen and game over screen. Display a "NEW HIGH SCORE!" celebration when it's beaten.
+
+**Where to start:** `localStorage` was introduced in Chapter 6's exercises. The pattern is the same: `JSON.stringify` to save, `JSON.parse` to load. What data needs to persist? Just one number.
+
+---
+
+**Step 1: Load and save the high score.**
+
+```javascript
+let highScore = parseInt(localStorage.getItem('breakoutHighScore') || '0');
+
+function saveHighScore() {
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('breakoutHighScore', String(highScore));
+    return true;  // new high score!
+  }
+  return false;
+}
+```
+
+---
+
+**Step 2: Check at game over.**
+
+```javascript
+// In the logic that handles when lives run out:
+const isNewHighScore = saveHighScore();
+gameState = 'gameOver';
+```
+
+---
+
+**Step 3: Display in the draw function.**
+
+```javascript
+// On the start screen:
+ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 60);
+
+// On the game over screen, if it's a new record:
+if (isNewHighScore) {
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('NEW HIGH SCORE!', canvas.width / 2, canvas.height / 2 + 40);
+}
+```
+
+**But there's a problem:** `isNewHighScore` is a local variable inside your game-over logic. The `draw()` function needs it later. How do you share it?
+
+*(You need a module-level variable: `let isNewHighScore = false;`. Set it when you call `saveHighScore()`, use it in `draw()`. This is the same "single source of truth in state variables" pattern we've used throughout.)*
+
+---
 
 ## What You Learned
 
-| Concept | How We Used It |
-|---------|---------------|
-| requestAnimationFrame | Created a smooth 60fps game loop that syncs with monitor refresh |
-| Canvas API | Drew bricks, paddle, ball, and UI on a 2D canvas |
-| AABB Collision | Detected ball hitting paddle, bricks, and walls accurately |
-| Keyboard Events | Captured arrow key input for paddle control |
-| Mouse Events | Tracked mouse position for smooth paddle following |
-| Game State | Managed multiple screens (start, playing, game over, etc.) |
-| Velocity/Physics | Moved objects by adding velocity each frame, bounced off walls |
-| Array Methods | Used `filter()`, `every()`, and `forEach()` to manage collections |
-| Arrow Functions | Wrote concise update and draw functions |
-| Event Listeners | Responded to input and coordinated game timing |
+| Concept | How We Used It | Real-World Use |
+|---------|---------------|----------------|
+| `requestAnimationFrame` | 60fps game loop synced with monitor | All smooth browser animations; React's reconciler batches updates similarly |
+| Canvas API | Drew bricks, paddle, ball every frame | Game engines, data viz (D3), image editors |
+| AABB Collision | Ball vs. paddle, ball vs. bricks | Physics engines, UI drag-and-drop hit testing |
+| Velocity | `ball.x += ball.dx` every frame | CSS transitions, tweening libraries (GSAP) |
+| Key state tracking | `keys` object checked in update | Game input; any keyboard shortcut system |
+| Game state machine | `start` → `playing` → `gameOver` | UI flows, wizard steps, media player states |
+| Backwards array iteration | Removing items while iterating | Filtering live collections in game engines |
+
+### Real-World Connections
+
+- **requestAnimationFrame** is used by every animation library (GSAP, Framer Motion, Three.js). They all use the same "update state, redraw, request next frame" loop.
+- **Phaser.js** is a JavaScript game framework that wraps everything you've built here: the game loop, input handling, collision detection, and state management into a polished API.
+- **Three.js** uses the same render loop for 3D. The difference is WebGL instead of Canvas 2D, but the `requestAnimationFrame` game loop is identical.
+- **Physics engines** (Matter.js, Box2D) are sophisticated collision detection systems. AABB is the simplest case; they handle circles, polygons, and continuous collision detection for fast-moving objects.
 
 ## Building with Claude
 
-You can use Claude to help you extend this game in many ways. Ask Claude to add new features like pause functionality, multiple ball modes, or brick patterns. Describe what you want ("Add a slow-motion power-up that lasts 3 seconds"), and Claude can write the code for you.
-
-Claude is particularly useful for game physics problems. If your ball isn't bouncing realistically, describe the behavior ("The ball bounces too fast off the paddle") and Claude can help you adjust the physics. You can also ask Claude to help you debug collision detection issues or optimize performance.
-
-As you build more complex games, you might want to ask Claude about architectural patterns like entity-component systems, spatial partitioning for collision detection, or state machines. These concepts become important when games have hundreds of objects or complex game logic. Claude can explain these patterns and help you implement them incrementally, starting simple and adding complexity only when needed.
+- "Add a multiball power-up that spawns a second ball for 10 seconds."
+- "Add particle effects: when a brick breaks, spawn 8–12 small squares that fly outward and fade."
+- "Add a level editor: show a grid, click cells to toggle bricks, save/load the layout to localStorage."
+- "Make bricks take multiple hits: some need 2 or 3 hits to destroy. Show hit points as a number on the brick."

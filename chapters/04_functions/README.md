@@ -1,572 +1,53 @@
-# Chapter 4: Functions — Password Generator
+# Chapter 4: Functions
 
-In this chapter, we build a working password generator to learn functions from the ground up: declarations, arrow functions, default parameters, return values, scope, closures, and higher-order functions. Every concept is demonstrated in real code.
+## Why Functions Exist
 
-## The Complete Program
+Without functions, every program would be a long list of statements, top to bottom. You'd repeat the same code every place you needed it. Fixing a bug would mean finding every copy. Reading the code would mean understanding everything at once.
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Password Generator — Chapter 4: Functions</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+Functions solve this. A function is a named, reusable chunk of logic. You write it once, name it well, and call it whenever you need it. The name becomes documentation: `generatePassword()` tells you exactly what happens inside.
 
-    body {
-      background: #0d1b2a;
-      color: #c9d6df;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
+But functions aren't just about reuse. They're about **control**: what information goes in, what comes out, what can be seen from outside. Once you understand scope and closures — how functions control access to variables — the rest of JavaScript starts making sense.
 
-    .card {
-      background: #112240;
-      border: 1px solid #1e3a5f;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-      max-width: 520px;
-      width: 100%;
-      padding: 2rem;
-    }
+**Coming up:** Functions are the unit of everything in Chapter 5 (every creature behavior is a function), Chapter 7 (every calculator operation is a function), Chapter 9 (the game loop *is* a function calling itself), and Chapter 11 (every drum sound is a synthesis function). The closures you learn here power the timer in Chapter 3, the audio scheduler in Chapter 11, and event handlers everywhere.
 
-    .card-header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 1.75rem;
-    }
+## The Program: Password Generator
 
-    .lock-icon {
-      font-size: 1.6rem;
-      filter: drop-shadow(0 0 6px #00d4aa88);
-    }
+A working password generator with character set selection, length slider, strength meter, and copy-to-clipboard. Open `password_generator.html` and generate a few passwords before reading the code.
 
-    h1 {
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: #e6f1ff;
-      letter-spacing: 0.02em;
-    }
+Notice: every time you change a checkbox or move the slider, the password regenerates immediately. No "update" button needed — the UI stays in sync automatically. Understanding *how* requires understanding how functions compose.
 
-    h1 span {
-      color: #00d4aa;
-    }
+## How It Works
 
-    .section-label {
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 0.5rem;
-    }
+### The Three Ways to Write a Function
 
-    /* Password display */
-    .password-display {
-      position: relative;
-      margin-bottom: 1.5rem;
-    }
+JavaScript has three syntaxes for functions. They're not just stylistic — each has a different use case:
 
-    #password-output {
-      width: 100%;
-      background: #0d1b2a;
-      border: 1px solid #1e3a5f;
-      border-radius: 8px;
-      color: #00d4aa;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 1.1rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      padding: 0.9rem 3rem 0.9rem 1rem;
-      resize: none;
-      word-break: break-all;
-      min-height: 64px;
-      line-height: 1.6;
-      outline: none;
-    }
+```javascript
+// 1. Function declaration — the classic form
+function generatePassword(length, options) {
+  // body
+}
 
-    #copy-btn {
-      position: absolute;
-      top: 0.6rem;
-      right: 0.6rem;
-      background: #1e3a5f;
-      border: 1px solid #2a5080;
-      border-radius: 6px;
-      color: #a0bcd8;
-      cursor: pointer;
-      font-size: 1rem;
-      padding: 0.3rem 0.5rem;
-      transition: background 0.15s, color 0.15s;
-    }
+// 2. Arrow function — concise, great for callbacks and short helpers
+const upperChars = () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-    #copy-btn:hover {
-      background: #2a5080;
-      color: #e6f1ff;
-    }
-
-    #copy-btn.copied {
-      background: #00d4aa22;
-      border-color: #00d4aa;
-      color: #00d4aa;
-    }
-
-    /* Strength meter */
-    .strength-section {
-      margin-bottom: 1.5rem;
-    }
-
-    .strength-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-
-    #strength-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      color: #64748b;
-      transition: color 0.3s;
-    }
-
-    .strength-bar {
-      display: flex;
-      gap: 4px;
-    }
-
-    .strength-segment {
-      flex: 1;
-      height: 6px;
-      background: #1e3a5f;
-      border-radius: 3px;
-      transition: background 0.3s;
-    }
-
-    /* Slider */
-    .slider-section {
-      margin-bottom: 1.25rem;
-    }
-
-    .slider-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 0.5rem;
-    }
-
-    #length-value {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #00d4aa;
-      font-family: 'Courier New', Courier, monospace;
-    }
-
-    #length-slider {
-      -webkit-appearance: none;
-      width: 100%;
-      height: 4px;
-      background: #1e3a5f;
-      border-radius: 2px;
-      outline: none;
-      cursor: pointer;
-    }
-
-    #length-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 18px;
-      height: 18px;
-      background: #00d4aa;
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 0 8px #00d4aa66;
-    }
-
-    /* Checkboxes */
-    .options-section {
-      margin-bottom: 1.75rem;
-    }
-
-    .options-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.6rem;
-    }
-
-    .option-label {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      cursor: pointer;
-      font-size: 0.9rem;
-      color: #a0bcd8;
-      padding: 0.45rem 0.6rem;
-      border-radius: 6px;
-      border: 1px solid #1e3a5f;
-      background: #0d1b2a;
-      transition: border-color 0.15s, background 0.15s;
-      user-select: none;
-    }
-
-    .option-label:hover {
-      border-color: #2a5080;
-      background: #112240;
-    }
-
-    .option-label input[type="checkbox"] {
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      border: 2px solid #2a5080;
-      border-radius: 4px;
-      background: #0d1b2a;
-      cursor: pointer;
-      flex-shrink: 0;
-      position: relative;
-      transition: background 0.15s, border-color 0.15s;
-    }
-
-    .option-label input[type="checkbox"]:checked {
-      background: #00d4aa;
-      border-color: #00d4aa;
-    }
-
-    .option-label input[type="checkbox"]:checked::after {
-      content: '';
-      position: absolute;
-      left: 3px;
-      top: 0px;
-      width: 5px;
-      height: 9px;
-      border: 2px solid #0d1b2a;
-      border-top: none;
-      border-left: none;
-      transform: rotate(45deg);
-    }
-
-    .char-preview {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 0.7rem;
-      color: #64748b;
-      margin-left: auto;
-    }
-
-    /* Generate button */
-    #generate-btn {
-      width: 100%;
-      background: linear-gradient(135deg, #00b894, #0097e6);
-      border: none;
-      border-radius: 8px;
-      color: #fff;
-      cursor: pointer;
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      padding: 0.85rem;
-      text-transform: uppercase;
-      transition: opacity 0.15s, transform 0.1s;
-    }
-
-    #generate-btn:hover {
-      opacity: 0.9;
-    }
-
-    #generate-btn:active {
-      transform: scale(0.98);
-    }
-
-    .warning {
-      font-size: 0.75rem;
-      color: #e17055;
-      margin-top: 0.5rem;
-      text-align: center;
-      min-height: 1.2em;
-    }
-  </style>
-</head>
-<body>
-
-<div class="card">
-  <div class="card-header">
-    <span class="lock-icon">&#x1F510;</span>
-    <h1>Password <span>Generator</span></h1>
-  </div>
-
-  <!-- Password output -->
-  <div class="password-display">
-    <textarea id="password-output" readonly rows="2" spellcheck="false"></textarea>
-    <button id="copy-btn" title="Copy to clipboard">&#x1F4CB;</button>
-  </div>
-
-  <!-- Strength meter -->
-  <div class="strength-section">
-    <div class="strength-header">
-      <span class="section-label">Strength</span>
-      <span id="strength-label">&#8212;</span>
-    </div>
-    <div class="strength-bar" id="strength-bar">
-      <div class="strength-segment"></div>
-      <div class="strength-segment"></div>
-      <div class="strength-segment"></div>
-      <div class="strength-segment"></div>
-      <div class="strength-segment"></div>
-    </div>
-  </div>
-
-  <!-- Length slider -->
-  <div class="slider-section">
-    <div class="slider-header">
-      <span class="section-label">Length</span>
-      <span id="length-value">16</span>
-    </div>
-    <input type="range" id="length-slider" min="8" max="64" value="16">
-  </div>
-
-  <!-- Options -->
-  <div class="options-section">
-    <p class="section-label">Character Types</p>
-    <div class="options-grid">
-      <label class="option-label">
-        <input type="checkbox" id="opt-upper" checked>
-        Uppercase
-        <span class="char-preview">A&#8211;Z</span>
-      </label>
-      <label class="option-label">
-        <input type="checkbox" id="opt-lower" checked>
-        Lowercase
-        <span class="char-preview">a&#8211;z</span>
-      </label>
-      <label class="option-label">
-        <input type="checkbox" id="opt-numbers" checked>
-        Numbers
-        <span class="char-preview">0&#8211;9</span>
-      </label>
-      <label class="option-label">
-        <input type="checkbox" id="opt-symbols" checked>
-        Symbols
-        <span class="char-preview">!@#&#8230;</span>
-      </label>
-    </div>
-    <p class="warning" id="warning"></p>
-  </div>
-
-  <!-- Generate button -->
-  <button id="generate-btn">Generate Password</button>
-</div>
-
-<script>
-  // ─── Character set builder functions ─────────────────────────────────────
-
-  // Each helper returns one group of characters (or empty string if disabled).
-  // These are arrow functions — a short way to write a function.
-  const upperChars  = () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowerChars  = () => 'abcdefghijklmnopqrstuvwxyz';
-  const numberChars = () => '0123456789';
-  const symbolChars = () => '!@#$%^&*()-_=+[]{}|;:,.<>?';
-
-  // getCharset uses .filter (a higher-order function) to keep only the groups
-  // that are enabled, then maps each group to its characters, then joins them
-  // all into one big string of allowed characters.
-  const getCharset = (options) => {
-    const groups = [
-      { enabled: options.upper,   chars: upperChars() },
-      { enabled: options.lower,   chars: lowerChars() },
-      { enabled: options.numbers, chars: numberChars() },
-      { enabled: options.symbols, chars: symbolChars() },
-    ];
-    return groups
-      .filter(group => group.enabled)
-      .map(group => group.chars)
-      .join('');
-  };
-
-  // ─── Core generation function ─────────────────────────────────────────────
-
-  // generatePassword is a function declaration (starts with the word function).
-  // It uses default parameters: if you call generatePassword() with no
-  // arguments, length defaults to 16 and options defaults to {}.
-  // Array.from is a higher-order function — it takes a mapping function
-  // and calls it once for each position to build the array.
-  function generatePassword(length = 16, options = {}) {
-    const charset = getCharset(options);
-    if (charset.length === 0) return '';
-
-    return Array.from(
-      { length },
-      () => charset[Math.floor(Math.random() * charset.length)]
-    ).join('');
-  }
-
-  // ─── Strength calculation ─────────────────────────────────────────────────
-
-  // calculateStrength returns a number from 0 to 4.
-  // Each check that passes adds 1 to the score.
-  // /[A-Z]/.test(password) uses a regular expression to check whether
-  // the password contains at least one uppercase letter.
-  function calculateStrength(password) {
-    if (password.length === 0) return -1;
-
-    let score = 0;
-    if (password.length >= 12) score++;
-    if (password.length >= 20) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
-
-    return Math.min(score, 4);
-  }
-
-  // ─── Closure example: makeStrengthFormatter ──────────────────────────────
-
-  // makeStrengthFormatter is a function that RETURNS another function.
-  // The returned function "closes over" (remembers) the labels and colors
-  // arrays even after makeStrengthFormatter has finished running.
-  // This is called a closure.
-  const makeStrengthFormatter = (labels, colors) => {
-    return (score) => ({
-      label: score < 0 ? '—' : labels[score],
-      color: score < 0 ? '#64748b' : colors[score],
-    });
-  };
-
-  const formatStrength = makeStrengthFormatter(
-    ['Very Weak', 'Weak',    'Fair',    'Strong',  'Very Strong'],
-    ['#e17055',   '#e17055', '#fdcb6e', '#00b894', '#00d4aa']
-  );
-
-  // ─── Higher-order function example: checkPassword ────────────────────────
-
-  // checkPassword takes an ARRAY OF FUNCTIONS and returns a NEW FUNCTION.
-  // The new function runs a password through every test.
-  // It returns true only if every single test passes.
-  // This is a higher-order function because it both receives functions
-  // (tests) and returns a function.
-  const checkPassword = (tests) => (password) => tests.every(test => test(password));
-
-  const isNonEmpty   = (pw) => pw.length > 0;
-  const isLongEnough = (pw) => pw.length >= 8;
-
-  // isValid is a function built from checkPassword — we pass it an array
-  // of test functions, and it gives us back a single validator.
-  const isValid = checkPassword([isNonEmpty, isLongEnough]);
-
-  // ─── DOM helpers ─────────────────────────────────────────────────────────
-
-  // getOptions reads the current state of the four checkboxes.
-  function getOptions() {
-    return {
-      upper:   document.getElementById('opt-upper').checked,
-      lower:   document.getElementById('opt-lower').checked,
-      numbers: document.getElementById('opt-numbers').checked,
-      symbols: document.getElementById('opt-symbols').checked,
-    };
-  }
-
-  // getLength reads the current value of the slider and converts it
-  // from a string to an integer using parseInt.
-  function getLength() {
-    return parseInt(document.getElementById('length-slider').value, 10);
-  }
-
-  // updateStrengthUI paints the 5-segment bar and updates the label.
-  // It uses the score from calculateStrength to decide how many
-  // segments to fill in, and what color to use.
-  function updateStrengthUI(password) {
-    const score     = calculateStrength(password);
-    const formatted = formatStrength(score);
-    const segments  = document.querySelectorAll('.strength-segment');
-    const label     = document.getElementById('strength-label');
-
-    label.textContent = formatted.label;
-    label.style.color = formatted.color;
-
-    // Loop through each of the 5 segments
-    segments.forEach((seg, i) => {
-      seg.style.background = (i <= score && score >= 0)
-        ? formatted.color
-        : '#1e3a5f';
-    });
-  }
-
-  // ─── Main update function ─────────────────────────────────────────────────
-
-  // update is called whenever anything changes.
-  // It reads the current options, generates a new password,
-  // displays it, and updates the strength meter.
-  function update() {
-    const options = getOptions();
-    const length  = getLength();
-    const charset = getCharset(options);
-    const warning = document.getElementById('warning');
-
-    // If no character types are selected, show a warning instead
-    if (charset.length === 0) {
-      document.getElementById('password-output').value = '';
-      warning.textContent = 'Please select at least one character type.';
-      updateStrengthUI('');
-      return;
-    }
-
-    warning.textContent = '';
-    const password = generatePassword(length, options);
-    document.getElementById('password-output').value = password;
-    updateStrengthUI(password);
-  }
-
-  // ─── Event listeners ─────────────────────────────────────────────────────
-
-  // When the slider moves, update the live number label AND regenerate
-  document.getElementById('length-slider').addEventListener('input', (e) => {
-    document.getElementById('length-value').textContent = e.target.value;
-    update();
-  });
-
-  // When any checkbox changes, regenerate immediately
-  ['opt-upper', 'opt-lower', 'opt-numbers', 'opt-symbols'].forEach(id => {
-    document.getElementById(id).addEventListener('change', update);
-  });
-
-  // When the button is clicked, regenerate
-  document.getElementById('generate-btn').addEventListener('click', update);
-
-  // When the copy button is clicked, copy the password and show feedback
-  document.getElementById('copy-btn').addEventListener('click', () => {
-    const output = document.getElementById('password-output');
-    if (!isValid(output.value)) return;
-
-    navigator.clipboard.writeText(output.value).then(() => {
-      const btn = document.getElementById('copy-btn');
-      btn.textContent = 'Copied!';
-      btn.classList.add('copied');
-      setTimeout(() => {
-        btn.textContent = '\u{1F4CB}';
-        btn.classList.remove('copied');
-      }, 1500);
-    });
-  });
-
-  // ─── Run once on page load ────────────────────────────────────────────────
-  update();
-</script>
-</body>
-</html>
+// 3. Arrow with body — for multi-line arrow functions
+const getCharset = (options) => {
+  const groups = [...];
+  return groups.filter(...).map(...).join('');
+};
 ```
 
-## Walkthrough
+**When to use which?**
+- **Function declarations** for the main logic functions with names you'll search for: `generatePassword`, `calculateStrength`, `update`. They're also *hoisted* — the JavaScript engine reads them before executing, so you can call them before they appear in the file.
+- **Arrow functions without a body** when a function is a single expression: `const double = n => n * 2`. The `return` is implicit.
+- **Arrow functions with a body** when a callback needs multiple lines: `array.filter(x => { ... })`.
 
-### Function Declarations
+**Coming up:** In Chapter 7, event handlers use arrow functions: `btn.addEventListener('click', () => { ... })`. In Chapter 9, the game loop uses a named function declaration: `function gameLoop() { requestAnimationFrame(gameLoop); }` — because it needs to call itself by name.
 
-A **function declaration** is how we write a named function. Use this for the main logic of your program.
+### Default Parameters
+
+Functions can have fallback values for parameters the caller doesn't provide:
 
 ```javascript
 function generatePassword(length = 16, options = {}) {
@@ -580,214 +61,466 @@ function generatePassword(length = 16, options = {}) {
 }
 ```
 
-A function declaration starts with `function`, has a name (`generatePassword`), takes parameters in parentheses, and has a body in curly braces. We can call it anywhere in our code, even before it's defined. This one generates a random password of a given length using only the character types we ask for.
+If you call `generatePassword()` with no arguments: `length` is 16, `options` is `{}`. If you call `generatePassword(32, { upper: true, lower: true })`: those values override the defaults.
 
-### Arrow Functions
+**Why defaults?** They make functions useful with minimal input. `generatePassword()` just works. `generatePassword(64, allOptions)` gives full control. Same function, different levels of detail.
 
-**Arrow functions** are a shorter syntax for writing functions. Great for short callbacks.
-
-```javascript
-const upperChars  = () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const lowerChars  = () => 'abcdefghijklmnopqrstuvwxyz';
-const numberChars = () => '0123456789';
-```
-
-An arrow function uses `=>` (read: "arrow"). If the body is one expression, you can skip the curly braces and `return` keyword—the value is returned automatically. These three functions take no arguments and return their strings directly. Compare arrow functions to regular functions: both work, but arrows are cleaner when you're building something tiny.
-
-### Parameters and Defaults
-
-**Default parameters** let you specify what value a parameter should have if the caller doesn't provide one.
+**`Array.from({ length }, fn)` — a concise way to build arrays:**
 
 ```javascript
-function generatePassword(length = 16, options = {}) {
-  // ...
-}
+Array.from({ length: 5 }, (_, i) => i * 2)
+// → [0, 2, 4, 6, 8]
+
+Array.from({ length: 10 }, () => charset[Math.floor(Math.random() * charset.length)])
+// → 10 random characters from charset
 ```
 
-If I call `generatePassword()` with no arguments, `length` becomes 16 and `options` becomes an empty object. If I call `generatePassword(20, { upper: true })`, those values override the defaults. This makes the function flexible and forgiving.
+`Array.from` takes anything with a `length` property and a mapping function. Here, `{ length }` is shorthand for `{ length: length }` — it creates an array of `length` elements, each produced by the callback.
 
-### Return Values
+### Scope: Who Can See What
 
-**Return values** are how a function sends a value back to whoever called it.
+Every variable has a **scope** — the region of code where it exists. Understanding scope prevents a whole class of bugs.
 
-```javascript
-function calculateStrength(password) {
-  let score = 0;
-  if (password.length >= 12) score++;
-  if (password.length >= 20) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
+```
+ Scope diagram:
 
-  return Math.min(score, 4);
-}
+ ┌─ File (module) scope ─────────────────────────────────────────┐
+ │  const upperChars = ...    ← visible to all functions below   │
+ │  const lowerChars = ...                                        │
+ │  const formatStrength = ...                                    │
+ │                                                                │
+ │  ┌─ update() scope ─────────────────────────────────────────┐ │
+ │  │  const options = getOptions()   ← only inside update()   │ │
+ │  │  const length  = getLength()    ← only inside update()   │ │
+ │  │  const password = ...           ← only inside update()   │ │
+ │  │                                                          │ │
+ │  │  ┌─ if block scope ────────────────────────────────────┐ │ │
+ │  │  │  const message = 'Please select...'   ← narrowest   │ │ │
+ │  │  └────────────────────────────────────────────────────┘ │ │
+ │  └──────────────────────────────────────────────────────────┘ │
+ └───────────────────────────────────────────────────────────────┘
 ```
 
-This function adds up points based on the password's features, then returns a single number from 0 to 4. The `return` statement stops the function and sends the value back. Without it, the function returns `undefined`.
+Variables declared inside a function are **local** — they only exist while the function runs. Once `update()` finishes, `options`, `length`, and `password` are gone. The next call to `update()` creates them fresh.
 
-### Scope
+Variables at the top of the file (outside all functions) are **module-level** — every function can read them. The password generator uses these for configuration constants that all functions need to share.
 
-**Scope** is the rule for which code can see which variables. Variables declared with `const` and `let` are only visible inside the block where they're declared.
+**Why does scope matter?** Keeping variables local prevents bugs. If `generatePassword` and `update` both used a global `length` variable, they'd interfere with each other. Local variables make functions independent.
 
-```javascript
-function update() {
-  const options = getOptions();    // visible only inside update()
-  const length  = getLength();     // visible only inside update()
-  const charset = getCharset(options);  // visible only inside update()
-  const warning = document.getElementById('warning');  // visible only inside update()
+**Coming up:** In Chapter 9, the game's ball position (`ballX`, `ballY`) is module-level state because multiple functions — `update`, `draw`, `handleCollision` — all need to read and write it. In Chapter 12, `gameState` is module-level for the same reason.
 
-  if (charset.length === 0) {
-    const message = 'Please select at least one character type.';  // visible only inside this if block
-    warning.textContent = message;
-  }
-}
-```
+### Closures: Functions That Remember
 
-Everything declared inside `update()` is local to `update()`. Once `update()` finishes, those variables disappear. This is good: it keeps your code clean and prevents accidents. Variables declared at the top level (outside any function) are global—every function can see them, but you should use them sparingly.
-
-### Closures
-
-A **closure** is a function that remembers variables from where it was created, even after that place has finished running. This sounds magical, but it's just how functions work.
+Here's the part that feels like magic until you see how it works:
 
 ```javascript
 const makeStrengthFormatter = (labels, colors) => {
-  return (score) => ({
-    label: score < 0 ? '—' : labels[score],
-    color: score < 0 ? '#64748b' : colors[score],
+  //   ↑ labels and colors are parameters of makeStrengthFormatter
+
+  return (score) => ({       // ← this function is the closure
+    label: score < 0 ? '—' : labels[score],   // uses labels from outer scope
+    color: score < 0 ? '#64748b' : colors[score],  // uses colors from outer scope
   });
 };
 
 const formatStrength = makeStrengthFormatter(
   ['Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'],
-  ['#e17055', '#e17055', '#fdcb6e', '#00b894', '#00d4aa']
+  ['#e17055',   '#e17055', '#fdcb6e', '#00b894', '#00d4aa']
 );
 ```
 
-`makeStrengthFormatter` returns a new function. That new function "remembers" the `labels` and `colors` arrays that were passed in, even though `makeStrengthFormatter` has finished running. Every time we call `formatStrength(score)`, it uses those remembered arrays. The inner function captured them—that's the closure.
+`makeStrengthFormatter` runs once and finishes. Normally, its `labels` and `colors` parameters would disappear. But the inner function it returned *captured* them — it holds a reference to those arrays. Later when you call `formatStrength(2)`, it still has access to `labels` and `colors` from when it was created.
 
-### Higher-Order Functions
+```
+ Closure memory:
 
-A **higher-order function** is a function that takes functions as arguments or returns a function. Arrays have many: `.filter()`, `.map()`, `.every()`.
-
-```javascript
-const getCharset = (options) => {
-  const groups = [
-    { enabled: options.upper,   chars: upperChars() },
-    { enabled: options.lower,   chars: lowerChars() },
-    { enabled: options.numbers, chars: numberChars() },
-    { enabled: options.symbols, chars: symbolChars() },
-  ];
-  return groups
-    .filter(group => group.enabled)
-    .map(group => group.chars)
-    .join('');
-};
+ makeStrengthFormatter finishes, but the returned function keeps:
+ ┌────────────────────────────────────────────────┐
+ │  Captured scope:                               │
+ │    labels → ['Very Weak', 'Weak', ...]         │
+ │    colors → ['#e17055', '#e17055', ...]        │
+ └────────────────────────────────────────────────┘
+          ↑
+      formatStrength calls this
+      with different scores each time
 ```
 
-Here, `.filter()` takes a function that returns `true` or `false`, and keeps only the items where it's `true`. `.map()` takes a function that transforms each item. Both are higher-order functions. Later:
+**Why is this useful?** Configuration-once, use-many. You pass the labels and colors *once* when creating the formatter. Every subsequent call to `formatStrength` uses those same arrays without you having to pass them again.
+
+**The practical pattern:** Closures let you bake configuration into a function. Factory functions like `makeStrengthFormatter` produce configured functions you call later. You'll recognize this everywhere:
 
 ```javascript
+// Same pattern — create a function configured for a specific task
+const multiply = (factor) => (n) => n * factor;
+const double = multiply(2);   // double(5) → 10
+const triple = multiply(3);   // triple(5) → 15
+```
+
+**Coming up:** The `createTimer` function in Chapter 3 uses a closure to capture `timeLeft`. The audio scheduler in Chapter 11 uses closures to capture scheduling state. Event handlers — every `addEventListener` callback — are closures that capture surrounding variables.
+
+### Higher-Order Functions: Functions That Take and Return Functions
+
+A **higher-order function** is any function that:
+1. Takes a function as an argument, OR
+2. Returns a function
+
+You've already used them in Chapter 3: `.filter()`, `.map()`, and `.forEach()` all take functions as arguments.
+
+The password generator uses a more explicit example:
+
+```javascript
+// Takes an array of test functions, returns a new function
 const checkPassword = (tests) => (password) => tests.every(test => test(password));
+
+// Three small, single-purpose test functions
+const isNonEmpty   = (pw) => pw.length > 0;
+const isLongEnough = (pw) => pw.length >= 8;
+
+// Compose them into a validator
+const isValid = checkPassword([isNonEmpty, isLongEnough]);
+
+// Now isValid is a function: isValid('hello') → false, isValid('helloworld') → true
 ```
 
-`checkPassword` takes an array of test functions, and returns a new function that runs all tests. This is a higher-order function because it receives functions and returns a function.
+Breaking this down:
+- `checkPassword` takes `tests` (an array of functions)
+- It returns `(password) => tests.every(test => test(password))` — a new function
+- That new function runs every test and returns `true` only if all pass
 
-## Try It
+```
+ Data flow through checkPassword:
 
-1. **Longer passwords**: Change the slider's `max` from 64 to 128. Generate a 100-character password and watch the strength meter. What happens?
-
-2. **Add a fourth strength level**: In `calculateStrength`, add another check: `if (password.length >= 32) score++;` Should this be score 5 or 6? Check the strength bar—how many segments does it have?
-
-3. **Time-based validity**: Modify `isValid` to also check that the password was generated "recently" (within the last 5 minutes). You'll need a helper that tracks when the password was created.
-
-## Exercises
-
-1. **Easy**: Add a "Copy and Regenerate" button that copies the password AND immediately generates a new one. Use `.click()` to call your existing functions.
-
-2. **Medium**: Create a function `suggestPassword()` that returns a strong password without needing user input. Give it smart defaults (no symbols if you don't want them, always at least 16 characters). Decide: should `suggestPassword` use the UI checkboxes or ignore them?
-
-3. **Hard**: Write a `passwordsMatch(pwd1, pwd2)` function that returns `true` only if two passwords are equally strong. Use `calculateStrength` inside it. Then build a "Verify Password" mode where you generate one password, and the user has to generate another just as strong.
-
-## Solutions
-
-**Easy: Copy and Regenerate button**
-
-```javascript
-document.getElementById('copy-regenerate-btn').addEventListener('click', () => {
-  document.getElementById('copy-btn').click();
-  document.getElementById('generate-btn').click();
-});
+  isValid('abc')
+       ↓
+  tests.every(test => test('abc'))
+       ↓ runs each test
+  isNonEmpty('abc')   → true  ✓
+  isLongEnough('abc') → false ✗
+       ↓
+  false (every requires all to pass)
 ```
 
-Or with explicit calls:
+**Why build validators this way?** Adding a new requirement is one line:
 
 ```javascript
-document.getElementById('copy-regenerate-btn').addEventListener('click', () => {
-  const output = document.getElementById('password-output');
-  navigator.clipboard.writeText(output.value);
-  update();
-});
+const hasSymbol = (pw) => /[^A-Za-z0-9]/.test(pw);
+const isStrongPassword = checkPassword([isNonEmpty, isLongEnough, hasSymbol]);
 ```
 
-**Medium: Smart password suggestion**
+No if-statement chains. No duplicated logic. The structure makes the rules readable.
+
+**Coming up:** Chapter 10's error handling composes checks similarly — a chain of conditions that all need to pass for a successful API response. Chapter 12's game validation uses the same pattern to check if a game can start.
+
+### Pure Functions vs. Functions with Side Effects
+
+The password generator cleanly separates two types of functions:
+
+**Pure functions** — given the same inputs, always return the same output. No outside state changed:
 
 ```javascript
-function suggestPassword(minLength = 16) {
-  return generatePassword(minLength, {
-    upper: true,
-    lower: true,
-    numbers: true,
-    symbols: true,
-  });
+function generatePassword(length = 16, options = {}) { ... }
+function calculateStrength(password) { ... }
+const getCharset = (options) => { ... }
+```
+
+**Functions with side effects** — they reach outside themselves to change the world (the DOM, a global variable):
+
+```javascript
+function update() {
+  // reads DOM, writes DOM, calls multiple other functions
+}
+function updateStrengthUI(password) {
+  // writes to DOM elements directly
 }
 ```
 
-This ignores the UI and always returns a strong password with all character types.
+The pure functions are easy to test and reason about — `generatePassword(16, {upper: true})` always does the same thing. The side-effect functions are harder to test but necessary — something has to update the page.
 
-**Hard: Match strength**
+**The design principle:** Push as much logic as possible into pure functions. Keep the DOM-touching functions thin — just read state, call the pure function, write the result.
+
+```
+ Good structure:
+
+  update()                    ← thin: reads DOM, writes DOM
+    ↓ calls
+  generatePassword(length, options)   ← pure: just computes
+    ↓ calls
+  getCharset(options)         ← pure: just computes
+```
+
+---
+
+## Guided Exercises
+
+### Exercise 1: Pronounceable Password Mode
+
+**The Challenge:** Add a "Pronounceable" checkbox. When checked, generate passwords using alternating consonants and vowels (like `tobuvex` or `kasipom`). These are weaker but easier to remember.
+
+**Where to start:** How would you represent "consonants" and "vowels" as character sets? Where does the generation logic change — in `getCharset`, or in `generatePassword` itself?
+
+*(The generation logic needs to change — you're not just picking from a combined pool, you're alternating. That's a new code path in `generatePassword`.)*
+
+---
+
+**Step 1: Define the character sets.**
 
 ```javascript
-function passwordsMatch(pwd1, pwd2) {
-  return calculateStrength(pwd1) === calculateStrength(pwd2);
+const vowels     = () => 'aeiou';
+const consonants = () => 'bcdfghjklmnpqrstvwxyz';
+```
+
+---
+
+**Step 2: Add the pronounceable option.**
+
+In `getOptions()`, add the new checkbox:
+
+```javascript
+function getOptions() {
+  return {
+    upper:        document.getElementById('opt-upper').checked,
+    lower:        document.getElementById('opt-lower').checked,
+    numbers:      document.getElementById('opt-numbers').checked,
+    symbols:      document.getElementById('opt-symbols').checked,
+    pronounceable: document.getElementById('opt-pronounceable').checked,  // ← new
+  };
 }
 ```
 
-For the game mode, store the target password and its strength, then check after each generation:
+Add the HTML checkbox to the options grid:
+```html
+<label class="option-label">
+  <input type="checkbox" id="opt-pronounceable">
+  Pronounceable
+  <span class="char-preview">abc</span>
+</label>
+```
+
+---
+
+**Step 3: Branch on pronounceable in generatePassword.**
 
 ```javascript
-let targetPassword = generatePassword();
-let targetStrength = calculateStrength(targetPassword);
-
-function handleGuess(guessPassword) {
-  const guessStrength = calculateStrength(guessPassword);
-  if (passwordsMatch(targetPassword, guessPassword)) {
-    return 'Correct strength! You matched.';
-  } else if (guessStrength < targetStrength) {
-    return 'Too weak. Try again.';
-  } else {
-    return 'Too strong. Try again.';
+function generatePassword(length = 16, options = {}) {
+  if (options.pronounceable) {
+    const v = vowels();
+    const c = consonants();
+    return Array.from(
+      { length },
+      (_, i) => {
+        const pool = i % 2 === 0 ? c : v;  // alternate: consonant, vowel, consonant...
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+    ).join('');
   }
+
+  // Original path
+  const charset = getCharset(options);
+  if (charset.length === 0) return '';
+  return Array.from(
+    { length },
+    () => charset[Math.floor(Math.random() * charset.length)]
+  ).join('');
 }
 ```
+
+**Think about it:** When `pronounceable` is on, the strength meter will show these passwords as weak (no uppercase, no symbols, possibly short). That's accurate! Should you disable the strength meter in this mode, or leave it as useful information?
+
+*(Leaving it as information is better — it tells users the tradeoff they're making.)*
+
+**Test it:** Check the pronounceable box and generate a few passwords. They should be readable syllables. The strength bar should drop to Weak or Fair.
+
+---
+
+### Exercise 2: Password History
+
+**The Challenge:** Keep a history of the last 5 generated passwords. Show them below the generator as clickable items — clicking one copies it to the clipboard.
+
+**Where to start:** You need state that persists across calls to `update()`. Where does that live?
+
+*(Outside all functions, at the module level — same reason game state lives at the top in Chapter 9.)*
+
+---
+
+**Step 1: Create the history array.**
+
+At the top of the script:
+
+```javascript
+const passwordHistory = [];  // max 5 entries
+```
+
+---
+
+**Step 2: Push to history in update().**
+
+After generating a valid password, add it to the front:
+
+```javascript
+function update() {
+  // ... existing code ...
+  const password = generatePassword(length, options);
+
+  passwordHistory.unshift(password);  // add to front (newest first)
+  if (passwordHistory.length > 5) passwordHistory.pop();  // keep only 5
+
+  document.getElementById('password-output').value = password;
+  updateStrengthUI(password);
+  renderHistory();  // ← call after updating
+}
+```
+
+**Why `unshift` not `push`?** `push` adds to the end. `unshift` adds to the beginning, so newest passwords appear at the top of the history list.
+
+---
+
+**Step 3: Write renderHistory().**
+
+```javascript
+function renderHistory() {
+  const container = document.getElementById('password-history');
+  if (!container) return;
+
+  container.innerHTML = passwordHistory
+    .map(pw => `<div class="history-item" onclick="copyToClipboard('${pw}')">${pw}</div>`)
+    .join('');
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text);
+}
+```
+
+Add to the HTML (below the generate button):
+```html
+<div id="password-history"></div>
+```
+
+**Think about it:** The `onclick` approach embeds the password directly in the HTML attribute. What problem could this cause if the password contains a single quote character `'`? *(The `'` would break out of the attribute string.)*
+
+How would you fix it? *(Use `addEventListener` instead of `onclick`, storing passwords in a data structure and referencing them by index: `data-index="0"` plus an event listener that reads `passwordHistory[el.dataset.index]`.)*
+
+**The complete picture:** The history is a classic application of module-level state: declare outside functions, mutate inside `update()`, read in `renderHistory()`. Three functions, one shared piece of state, clearly defined responsibilities.
+
+---
+
+### Exercise 3: Build Your Own Validator
+
+**The Challenge:** Create a `makeValidator` function that takes a list of rules (each rule is a function that returns `true`/`false` and a message) and returns a validator. The validator returns either `null` (all rules pass) or the *first* failing rule's message.
+
+**Where to start:** This is a higher-order function — it takes functions and returns a function. Look at how `checkPassword` works as a model, but this version needs to return *which* rule failed.
+
+---
+
+**Step 1: Define the rule shape.**
+
+Each rule is an object with a `test` function and a `message`:
+
+```javascript
+const rules = [
+  { test: pw => pw.length >= 8,            message: 'Must be at least 8 characters' },
+  { test: pw => /[A-Z]/.test(pw),          message: 'Must contain an uppercase letter' },
+  { test: pw => /[0-9]/.test(pw),          message: 'Must contain a number' },
+];
+```
+
+---
+
+**Step 2: Write makeValidator.**
+
+```javascript
+function makeValidator(rules) {
+  return function(password) {
+    for (const rule of rules) {
+      if (!rule.test(password)) {
+        return rule.message;  // return the first failure message
+      }
+    }
+    return null;  // null means "no failures — all rules passed"
+  };
+}
+```
+
+**What's happening here?** `makeValidator` returns a new function (a closure) that captures `rules`. When called with a password, it loops through the rules until one fails, returning that rule's message. If all pass, it returns `null`.
+
+---
+
+**Step 3: Use it.**
+
+```javascript
+const validatePassword = makeValidator(rules);
+
+validatePassword('abc')      // → 'Must be at least 8 characters'
+validatePassword('abcdefgh') // → 'Must contain an uppercase letter'
+validatePassword('Abcdefgh') // → 'Must contain a number'
+validatePassword('Abcdefg1') // → null (all rules pass)
+```
+
+Add live validation to the generator:
+
+```javascript
+function update() {
+  // ... generate password ...
+
+  const error = validatePassword(password);
+  const warningEl = document.getElementById('warning');
+  warningEl.textContent = error || '';  // show error, or clear if null
+}
+```
+
+**Think about it:** The original `checkPassword` uses `.every()` which is elegant for "all must pass." The `makeValidator` uses a `for...of` loop with early return, which gives us the *message* of the first failure. Both are valid patterns — the right choice depends on what information you need.
+
+**Try extending it:** Add a rule that checks entropy: `{ test: pw => new Set(pw).size >= 8, message: 'Too many repeated characters' }`. The `Set` constructor removes duplicates, so `new Set(pw).size` counts unique characters.
+
+---
 
 ## What You Learned
 
-| Concept | Where it appeared |
-|---------|-------------------|
-| **Function declaration** | `generatePassword(length = 16, options = {})` |
-| **Arrow function** | `const upperChars = () => '...'` |
-| **Default parameters** | `length = 16, options = {}` |
-| **Return value** | `return Math.min(score, 4)` |
-| **Scope (local)** | Variables inside `update()` disappear after it runs |
-| **Scope (global)** | Variables declared at top level, visible everywhere |
-| **Closure** | `makeStrengthFormatter` returns a function that remembers its arguments |
-| **Higher-order function** | `.filter()`, `.map()`, `checkPassword` that takes and returns functions |
-| **Function as callback** | `addEventListener('click', () => { ... })` |
+| Concept | What It Does | Real-World Connection |
+|---------|-------------|----------------------|
+| **Function declaration** | Named, hoisted, callable before definition | The building block of all programs |
+| **Arrow functions** | Concise inline functions; implicit return for expressions | React event handlers, array method callbacks |
+| **Default parameters** | Fallback values when arguments are omitted | Makes APIs flexible — `fetch(url, { method: 'GET' })` |
+| **Return values** | Send data out of a function | Pure functions always return; they're the easiest to test |
+| **Scope** | Variables exist only in their declaring block | Prevents naming collisions; keeps functions independent |
+| **Closures** | Inner functions capture outer variables | React hooks (`useState`, `useEffect`), event listeners, factories |
+| **Higher-order functions** | Take or return functions | `.filter()`, `.map()`, React's `useMemo`, middleware in Express |
+| **Pure functions** | Same input → same output, no side effects | Easy to test, easy to reason about, basis of functional programming |
+| **Function composition** | Build complex behavior from simple functions | Lodash `_.compose`, Ramda, Redux middleware chain |
+
+### Closures Are Everywhere
+
+Once you see closures, you'll recognize them everywhere:
+
+```javascript
+// React hook — the callback closes over count
+const [count, setCount] = useState(0);
+useEffect(() => {
+  console.log(count);  // ← closure: captures count from render scope
+}, [count]);
+
+// Event listener — closes over the button element
+const btn = document.getElementById('submit');
+btn.addEventListener('click', () => {
+  btn.disabled = true;  // ← closure: btn is captured from outer scope
+});
+
+// setInterval — closes over variables from outer function
+function startPolling(url) {
+  let attempts = 0;
+  const id = setInterval(() => {
+    attempts++;               // ← closure: captures attempts
+    fetch(url).then(check);
+    if (attempts > 10) clearInterval(id);
+  }, 1000);
+}
+```
+
+The rule is simple: when a function accesses a variable from outside itself, that's a closure. You've been writing closures since Chapter 1 — now you know the name.
 
 ## Building with Claude
 
-1. **"Add a password history that remembers the last 10 passwords."** You'll need an array at the top level (not inside a function, so it persists), and a function to add to it. Where does the history display?
-
-2. **"Make a 'strong passwords only' mode that refuses to generate anything weaker than 'Strong'."** Modify the generate button to check the strength first. Should it keep regenerating until it finds a strong one, or show an error?
-
-3. **"Add a 'password rules' checker that shows what rules the password breaks."** Create a function `explainStrength(password)` that returns a list like `['No uppercase', 'No symbols']`. Update the UI to show this list below the strength meter.
+- "Add a 'password rules' display that lists which requirements the current password meets and which it doesn't. Use an array of rule objects, each with a `test` function, `label`, and pass/fail styling."
+- "Add a master password strength calculator: test entropy using `Math.log2(charsetSize ** passwordLength)`. Display bits of entropy alongside the strength meter."
+- "Add a passphrase generator mode: pick 4 random words from a wordlist separated by dashes. `correct-horse-battery-staple` style. Fetch the wordlist from a text file using `fetch`."
+- "Save the last-used settings to `localStorage` so the checkboxes remember their state across page loads. Use `JSON.stringify` and `JSON.parse`."

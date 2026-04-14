@@ -1,486 +1,472 @@
 # Chapter 12: Final Project
 
-Capstone projects matter because they force you to think like a real developer—not just writing isolated functions, but architecting an entire application where every decision affects everything else. Throughout this book, you've learned JavaScript's building blocks: variables, functions, objects, arrays, DOM manipulation, events, and asynchronous code. This chapter shows you how these pieces fit together in a complete, polished product that actually feels like something you'd use.
+## Why Architecture Matters at Scale
 
-The challenge of a capstone is not adding new syntax—it's combining what you already know. You'll encounter genuine problems: managing complex application state, coordinating multiple event listeners, handling errors from external APIs, and organizing thousands of lines of code so it doesn't become spaghetti. These are the problems real developers solve every day. Quiz Battle is designed to teach you these patterns by *requiring* them, not explaining them in the abstract.
+A 50-line program can be a mess and still work. You can read it top to bottom in two minutes and understand everything. But when a program grows to 500 lines — and Quiz Battle is around that — mess becomes dangerous. You change one thing and something unrelated breaks. You read a function and can't tell what it's supposed to do. You need to add a feature and aren't sure where it belongs.
 
-Building larger programs is also where you'll discover why code organization matters. A 50-line script can be messy and still work. A 500-line application becomes unmaintainable chaos unless you impose structure: separating concerns, naming functions clearly, grouping related logic. You'll see this in action here—how a simple object manages all game state, how one function handles all UI updates, how the API layer is isolated so you can swap fetching strategies without breaking the game.
+The solution isn't a magic framework. It's **organizing code around responsibilities**. The patterns here — separating state from rendering, grouping related functions, keeping data and display apart — are the same patterns React, Vue, and Redux implement. By building them yourself, you'll understand *why* those frameworks make the choices they do.
 
 ## The Program: Quiz Battle
 
-Quiz Battle is a local multiplayer quiz game where 2-4 players compete by buzzing in with keyboard shortcuts and answering multiple-choice questions. It fetches real trivia questions from the Open Trivia Database API, awards points based on speed, and displays a dramatic leaderboard at the end.
-
-This is a perfect capstone project because it requires you to juggle multiple concerns: player input, network requests, timers, animations, score calculations, and game state management. It's polished enough that you'll want to show it to someone—yet simple enough that you can understand every line. Every feature is here for a reason: the setup screen teaches form handling, the gameplay loop teaches event coordination, the timer teaches animation loops, and the confetti effect teaches canvas. You're not just learning isolated concepts; you're seeing how professional web apps combine them.
+A local multiplayer quiz game: 2–4 players compete on one keyboard, buzzing in to answer trivia questions fetched from a public API. Points scale with speed. A dramatic leaderboard at the end.
 
 [Open quiz_battle.html](quiz_battle.html) to play.
 
 ## How It Works
 
-### Project Architecture
+### The Architecture: Four Responsibilities
 
-The Quiz Battle code is organized around a central principle: **single responsibility**. Each section of the program does one thing well.
+The program divides into four sections, each with a single job:
 
-The program divides into four main layers:
+```
+┌─────────────────────────────────────────────────────┐
+│                   gameState                         │
+│  screen, players, scores, currentQuestion, ...      │
+│  The single source of truth. No data anywhere else. │
+└──────────────┬──────────────────────────────────────┘
+               │ read by                 ↑ written by
+               ▼                         │
+┌──────────────────────┐  ┌──────────────────────────┐
+│       render.*       │  │       events.*            │
+│  Reads state.        │  │  Handles user actions.    │
+│  Updates the DOM.    │  │  Updates state.           │
+│  Never writes state. │  │  Calls render.            │
+└──────────────────────┘  └──────────────────────────┘
+                   ↑ called by events
+           ┌───────────────────┐
+           │     utils.*       │
+           │  Pure helpers:    │
+           │  fetch, shuffle,  │
+           │  score calc, etc. │
+           └───────────────────┘
+```
 
-1. **Game State** (`gameState` object) - The single source of truth. It holds all data: players, scores, the current question, which player buzzed in, everything. No data is scattered across HTML attributes or function closures.
+This is the **state → render → events → state** cycle:
 
-2. **Rendering** (`render` object) - Pure functions that read from state and update the DOM. When the state changes, you call a render function; you never manually fiddle with the DOM. This makes bugs obvious: if something looks wrong on screen, check the render function.
+1. User does something (button click, keypress)
+2. Event handler updates `gameState`
+3. Event handler calls the appropriate `render.*()` function
+4. Render reads `gameState` and updates the DOM
+5. User sees the change and can act again
 
-3. **Events** (`events` object) - Handlers for user actions: clicking buttons, pressing keys, timeout completions. These are the bridges between the DOM and game state. They update state, then call render functions.
+**Why this separation?** When something looks wrong on screen, you know to check the render function. When the logic is wrong, you check the event handler. When data is wrong, you check state. Bugs have addresses.
 
-4. **Utilities** (`utils` object) - Helper functions for tasks that aren't tied to UI: fetching from APIs, shuffling arrays, calculating points, decoding HTML entities.
-
-This architecture is powerful because the pieces stay loosely coupled. You can change how questions are fetched (add websockets, for example) without touching the rendering code. You can redesign the UI without rewriting the game logic. The state object acts as a contract: as long as it has the right properties, other parts of the system don't care how they got there.
-
-Real applications scale this same pattern: they might use a library like Redux for state management or a framework like React for rendering, but the principle is identical.
-
-### Game State Management
-
-The `gameState` object is the heartbeat of the application:
+### gameState: Single Source of Truth
 
 ```javascript
 const gameState = {
-    screen: 'setup',           // Which UI are we showing?
-    playerCount: 0,            // How many players?
-    players: [],               // Array of player objects
-    selectedCategory: '9',     // Trivia DB category ID
-    selectedDifficulty: 'mixed',
-    selectedRounds: 5,
-    currentRound: 0,           // Which question are we on?
-    questions: [],             // Fetched trivia questions
-    currentQuestion: null,     // The question being answered
-    scores: {},                // Score tracking
-    questionStartTime: 0,      // Timestamp, used for time-based scoring
-    buzzerActive: false,       // Can players buzz in?
-    currentBuzzed: null        // Which player buzzed in?
+  screen: 'setup',          // which UI is visible
+  players: [],              // [{ name, color, buzzKey }]
+  scores: {},               // { 'Alice': 0, 'Bob': 0 }
+  questions: [],            // fetched from API
+  currentQuestion: null,    // the question being answered
+  questionStartTime: 0,     // when the question appeared
+  buzzerActive: false,      // can players buzz in?
+  currentBuzzed: null,      // which player buzzed
 };
 ```
 
-Notice the naming: you can glance at any property and understand what it holds. No ambiguity. This matters because you'll reference these properties hundreds of times while coding; clarity prevents bugs.
+**Why centralize all state here?** Consider the alternative: some state in DOM attributes (`data-player-score="42"`), some in module-level variables, some in function closures. Then a bug appears: the score display is wrong. Where do you look? You have to search everywhere.
 
-State flows through the application in a cycle:
-1. User interacts with the UI (clicks button, types name, presses key)
-2. Event handler runs, updating `gameState`
-3. Event handler calls appropriate `render.*()` function
-4. Render function reads from `gameState` and updates the DOM
-5. User sees the change and can interact again
+With a single state object, there's only one place to look. And there's only one path to change it: through event handlers. This makes behavior predictable.
 
-This cycle is fundamental to how modern applications work. It means bugs have clear causes: if the screen shows the wrong thing, either the state is wrong or the render function is buggy—no third option.
+This is what **Redux** formalizes: a single store, actions that describe changes, reducers that apply changes. `gameState` is the store. The event handlers are the reducers (simplified).
 
-### Working with External APIs
+### The Render Functions
 
-The Open Trivia Database provides free trivia questions via a JSON API. The trickiest part is handling what goes wrong: the API might be down, might rate-limit you, might return invalid data. Production applications spend half their code on error handling, not happy paths.
-
-The `utils.fetchQuestions()` function demonstrates this:
+Each render function reads from `gameState` and produces DOM. They never compute or modify state:
 
 ```javascript
-async fetchQuestions(amount, category, difficulty) {
-    try {
-        let url = `https://opentdb.com/api.php?amount=${amount}&category=${category}&type=multiple`;
-        if (difficulty !== 'mixed') {
-            url += `&difficulty=${difficulty}`;
-        }
+const render = {
+  gameScreen() {
+    // 1. Build the HTML from gameState
+    const html = gameState.players
+      .map(p => `<div class="score-card" style="background:${p.color}">
+                   <span>${p.name}</span>
+                   <span>${gameState.scores[p.name]}</span>
+                 </div>`)
+      .join('');
 
-        const response = await fetch(url);
-        const data = await response.json();
+    // 2. Set it on the element
+    document.getElementById('scoreboard').innerHTML = html;
 
-        if (data.response_code !== 0 || !data.results) {
-            return this.getFallbackQuestions(amount);
-        }
+    // 3. Show the question
+    render.displayQuestion();
+  },
 
-        return data.results.map(q => ({
-            question: this.decodeHtml(q.question),
-            correct_answer: this.decodeHtml(q.correct_answer),
-            incorrect_answers: q.incorrect_answers.map(a => this.decodeHtml(a))
-        }));
-    } catch (error) {
-        console.error('API Error:', error);
-        return this.getFallbackQuestions(amount);
-    }
-}
+  displayQuestion() {
+    const q = gameState.currentQuestion;
+    document.getElementById('questionText').textContent = q.question;
+    // ... display answer options ...
+  }
+};
 ```
 
-Key patterns:
-- **Async/await**: The `async` keyword lets you write asynchronous code that looks synchronous. `await fetch()` waits for the network request; the function pauses here.
-- **Try/catch**: Handles both network errors (the catch block) and logical errors (the if check inside try).
-- **Fallback strategy**: If the API fails, we have hardcoded questions. The game still works; it's just not fresh questions. Real applications always have a plan B.
-- **Data transformation**: The `.map()` call reshapes API data into a simpler format. Notice we extract only what we need and decode HTML entities (the API returns `&quot;` instead of `"`).
-
-When you're building applications, always ask: what could go wrong here? Network down? API changed? User no internet? Build for the pessimistic case; happy paths usually work.
+**Why `.map().join('')` to build HTML?** This transforms an array of data (players) into a string of HTML. `map` produces an array of strings, `join('')` concatenates them. It's the functional alternative to a for loop that appends to a string.
 
 ### The Buzz-In System
 
-Making 2-4 players respond simultaneously is a coordination problem. We solve it with a simple key map and a state flag:
+Multiple players can press keys simultaneously. Only the first keypress should register:
 
 ```javascript
 const keyMap = {
-    'q': 0, 'w': 0,  // Player 1 presses Q or W
-    'o': 1, 'p': 1,  // Player 2 presses O or P
-    'u': 2, 'i': 2,  // Player 3 presses U or I
-    '7': 3, '8': 3   // Player 4 presses 7 or 8
+  'q': 0, 'w': 0,  // Player 1
+  'o': 1, 'p': 1,  // Player 2
+  'u': 2, 'i': 2,  // Player 3
+  '7': 3, '8': 3   // Player 4
 };
 
 document.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    const playerIdx = keyMap[key];
+  const playerIdx = keyMap[e.key.toLowerCase()];
 
-    if (gameState.buzzerActive && playerIdx !== undefined && gameState.currentBuzzed === null) {
-        gameState.currentBuzzed = playerIdx;
-        gameState.buzzerActive = false;
-        // ... rest of handler
-    }
+  if (gameState.buzzerActive
+    && playerIdx !== undefined
+    && gameState.currentBuzzed === null) {
+
+    gameState.currentBuzzed = playerIdx;
+    gameState.buzzerActive = false;
+    render.showBuzz(playerIdx);
+  }
 }, { once: true });
 ```
 
-The critical line is `{ once: true }`. This adds the event listener for a single keypress only. When the quiz moves to the next question, we add a fresh listener. This prevents the problem of accumulating listeners that fire multiple times.
+`{ once: true }` is the key detail — this listener fires exactly once, then removes itself. A new listener is added when the next question begins. This prevents listeners stacking up and firing multiple times.
 
-The state check `gameState.buzzerActive` is important: if no question is being shown (e.g., we're showing results), keypresses do nothing. State guards logic.
+The guard `gameState.currentBuzzed === null` prevents two players buzzing in on the same keystroke if two keys are pressed simultaneously (extremely rare, but possible).
 
-Also notice: we don't immediately check the answer. We only record *who* buzzed in. The answer checking happens when the player actually clicks an answer button. This separation of concerns (buzzing vs. answering) makes the code clearer.
-
-### Timer and Scoring
-
-The countdown timer is a classic JavaScript pattern: `setInterval` runs a function repeatedly, updating state each time.
+### Scoring by Speed
 
 ```javascript
-let timeRemaining = 15;
-const interval = setInterval(() => {
-    if (timeRemaining <= 0) {
-        clearInterval(interval);
-        // Handle timeout
-        return;
-    }
-
-    timeRemaining--;
-    timerText.textContent = timeRemaining;
-
-    // Animate the circular progress
-    const percentage = (15 - timeRemaining) / 15;
-    const degrees = percentage * 360;
-    timerCircle.style.background =
-        `conic-gradient(${color} ${degrees}deg, #e0e0e0 ${degrees}deg)`;
-}, 1000); // Run every 1000ms = 1 second
-```
-
-The `conic-gradient` CSS trick creates a pie-chart effect: the gradient angle increases as time runs out, creating a visual progress indicator. The color changes based on urgency (blue → orange → red).
-
-Scoring rewards speed:
-
-```javascript
-calculatePoints(timeRemaining) {
-    const maxTime = 15;
-    const basePoints = 100;
-    const percentage = Math.max(0, timeRemaining / maxTime);
-    return Math.round(basePoints * percentage) + 50;
+utils.calculatePoints(timeRemaining) {
+  const maxTime = 15;
+  const basePoints = 100;
+  const speedBonus = Math.round(basePoints * (timeRemaining / maxTime));
+  return speedBonus + 50;  // minimum 50 points for correct answer
 }
 ```
 
-If a player answers immediately (15 seconds left), they get `100 * 1 + 50 = 150` points. If they answer with 0 seconds left, they get `100 * 0 + 50 = 50` points. This incentivizes quick thinking while still rewarding correct answers given more time.
+With 15 seconds left: `100 * (15/15) + 50 = 150` points.
+With 5 seconds left: `100 * (5/15) + 50 ≈ 83` points.
+With 0 seconds left: `100 * (0/15) + 50 = 50` points.
 
-### Canvas Celebration Effects
+The `+ 50` guarantees even slow correct answers earn something. Incentivizes speed while not punishing careful thinking too harshly.
 
-When the game ends, we create a confetti effect using the Canvas API—a 2D drawing surface. Each particle is an object with position, velocity, and color.
+### Canvas Confetti
+
+The celebration effect is the same particle system pattern from Chapter 9 (Breakout), now used for a different purpose:
 
 ```javascript
 const particles = [];
 for (let i = 0; i < 100; i++) {
-    particles.push({
-        x: Math.random() * canvas.width,
-        y: -10,
-        vx: (Math.random() - 0.5) * 8,    // horizontal velocity
-        vy: Math.random() * 5 + 3,        // vertical velocity
-        color: gameState.colors[Math.floor(Math.random() * gameState.colors.length)],
-        size: Math.random() * 8 + 4
-    });
+  particles.push({
+    x: Math.random() * canvas.width,
+    y: -10,
+    vx: (Math.random() - 0.5) * 8,  // spread left/right
+    vy: Math.random() * 5 + 3,       // fall down
+    color: randomColor(),
+    size: Math.random() * 8 + 4,
+  });
 }
 
 const animate = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);  // Erase previous frame
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach((p, idx) => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;  // gravity
 
-    particles.forEach((p, idx) => {
-        p.y += p.vy;
-        p.x += p.vx;
-        p.vy += 0.1;  // Gravity
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
 
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (p.y > canvas.height) {
-            particles.splice(idx, 1);  // Remove particles off-screen
-        }
-    });
-
-    if (particles.length > 0) {
-        requestAnimationFrame(animate);  // Loop
-    }
+    if (p.y > canvas.height) particles.splice(idx, 1);
+  });
+  if (particles.length > 0) requestAnimationFrame(animate);
 };
 
 animate();
 ```
 
-The animation loop uses `requestAnimationFrame`, which tells the browser "run this function before the next repaint." This synchronizes with the display refresh rate, ensuring smooth 60fps animation. Each frame, we update physics (position, velocity, gravity) and redraw.
+The game loop (`requestAnimationFrame`), velocity physics, and particle removal — you've seen all of this before.
 
-This is how game engines work: clear the canvas, update object state, draw new frame, repeat. The same pattern powers 2D games, data visualizations, and interactive art.
+---
 
-### Code Organization Patterns
+## Guided Exercises
 
-As your programs grow, organization becomes critical. A few patterns you'll see in Quiz Battle and should use in your own code:
+### Exercise 1: Custom Question Editor
 
-**1. Group Related Functions into Objects**
+**The Challenge:** Add a new screen where players can create their own questions before playing. Questions are saved to `localStorage`. A "Custom" category option in setup loads these instead of fetching from the API.
 
-Instead of:
-```javascript
-function updateScoreboard() { ... }
-function displayQuestion() { ... }
-function handleAnswer() { ... }
+**Where to start:** Think about what a question looks like in the game. What fields does it have? Look at how API questions are structured in `utils.fetchQuestions`.
+
+*(A question needs: `question` text, `correct_answer`, `incorrect_answers` array of 3.)*
+
+---
+
+**Step 1: Design the editor screen.**
+
+Add a new screen to the HTML with a form for entering questions:
+
+```html
+<div id="editorScreen" class="screen hidden">
+  <h2>Create Questions</h2>
+  <form id="questionForm">
+    <input id="qText" placeholder="Question" required>
+    <input id="qCorrect" placeholder="Correct answer" required>
+    <input id="qWrong1" placeholder="Wrong answer 1" required>
+    <input id="qWrong2" placeholder="Wrong answer 2" required>
+    <input id="qWrong3" placeholder="Wrong answer 3" required>
+    <button type="submit">Add Question</button>
+  </form>
+  <div id="questionList"></div>
+  <button id="startWithCustom">Play with these questions</button>
+</div>
 ```
 
-Use:
-```javascript
-const render = {
-    updateScoreboard() { ... },
-    displayQuestion() { ... },
-    handleAnswer() { ... }
-};
-```
+---
 
-This namespaces functions: `render.displayQuestion()` is clearer than just `displayQuestion()`. It says "this is a rendering operation."
-
-**2. Naming Conventions**
-
-- `gameState` - an object holding state
-- `events.startGame()` - an event handler (verb + noun)
-- `utils.shuffleArray()` - a utility (descriptive verb)
-- `render.gameScreen()` - a render function (verb + target)
-
-These patterns help you remember where things live without searching.
-
-**3. Keep Functions Small**
-
-`render.gameScreen()` calls `render.updateScoreboard()` and `render.displayQuestion()`. Each function does one thing. When you find yourself with a 100-line function, break it up. Small functions are easier to test, easier to reuse, and easier to debug.
-
-**4. Separate Data from Display**
-
-Game state (`gameState`) is pure data—JavaScript objects and arrays, no HTML. Rendering functions take state and produce HTML. This separation means you could swap the rendering engine (add a mobile UI) without changing game logic.
-
-**5. Document Assumptions**
-
-The buzz-in system assumes player count won't exceed 4 (we have 4 keyboard mappings). The score calculation assumes answers are worth between 50 and 150 points. These aren't bugs—they're constraints you should document in comments, so future maintainers (including you, weeks later) don't accidentally break them.
-
-## Try It
-
-After playing a few rounds, here are three ways to extend Quiz Battle:
-
-1. **Add a leaderboard file**: Track high scores across game sessions using localStorage. Display an "all-time top scores" screen before the game starts. This teaches persistence.
-
-2. **Implement question difficulty balancing**: Instead of picking difficulty at the start, randomly mix difficulties within a single game. This teaches dynamic option selection.
-
-3. **Add a hint system**: Players can use a one-time hint per game that reveals one incorrect answer. This teaches conditional logic and resource management.
-
-## Exercises
-
-### Exercise 1: Online Multiplayer (Concept)
-
-Quiz Battle is currently local-only: players compete on the same screen with keyboard shortcuts. Multiplayer over the internet is a significant leap, but it's worth sketching the architecture.
-
-Your challenge: Design (don't implement) how you'd add WebSocket-based multiplayer. Assume players connect from different computers, see a common set of questions in real-time, and their buzz-in happens simultaneously across the network.
-
-Think about:
-- How would you synchronize questions across players?
-- What happens if one player's internet is slow?
-- How would you prevent cheating (e.g., a player waiting to see the correct answer before submitting)?
-- Where would the server live? What would it store?
-
-Sketch the architecture: draw the components, show what data flows where, and list the new pieces you'd need to build.
-
-### Exercise 2: Custom Question Editor
-
-Add a new screen where players can create and save their own questions before playing. The screen should let them enter:
-- Question text
-- Four answer options
-- Which answer is correct
-- Difficulty level
-
-Store these questions in localStorage, and allow players to select "Custom Questions" as a category in the setup screen. During gameplay, if custom questions are selected, fetch from localStorage instead of the API.
-
-This teaches: form validation, localStorage, conditional data fetching.
-
-### Exercise 3: Tournament Mode
-
-Extend Quiz Battle to support tournament-style play with 4 players. Instead of one round of questions, run a bracket: Player 1 vs. Player 2, Player 3 vs. Player 4. Winners of those matches compete in the final. Each match is a quick 3-question "duel."
-
-You'll need:
-- A bracket screen showing matchups
-- Per-match state management (who's playing, their scores)
-- A "finals" screen after both semifinals
-- A new scoring model (just fastest correct answer wins the question, since it's 1v1)
-
-This teaches: state transitions, nested data structures, multi-screen workflows.
-
-## Solutions
-
-### Solution 1: Online Multiplayer (Concept)
-
-The architecture would look like this: one server handles message routing and state synchronization. Clients (web browsers) connect to the server via WebSocket.
-
-**Client-side changes:**
-```javascript
-// Instead of fetching questions directly
-const questions = await utils.fetchQuestions(...);
-
-// Clients wait for the server to broadcast questions
-let questions = [];
-websocket.addEventListener('message', (e) => {
-    const {type, data} = JSON.parse(e.data);
-    if (type === 'QUESTIONS_LOADED') {
-        questions = data.questions;
-        gameState.currentQuestion = questions[0];
-        render.gameScreen();
-    }
-});
-```
-
-**Server-side (pseudocode):**
-```javascript
-// Node.js with WebSocket library
-const server = new WebSocketServer();
-
-server.on('connection', (client) => {
-    client.on('message', (msg) => {
-        const {type, playerName} = JSON.parse(msg);
-
-        if (type === 'JOIN_GAME') {
-            // Broadcast this player joining to all other clients
-            server.broadcast({
-                type: 'PLAYER_JOINED',
-                playerName: playerName
-            });
-        }
-
-        if (type === 'BUZZ_IN') {
-            // Relay buzz-in to all players with timestamp
-            server.broadcast({
-                type: 'PLAYER_BUZZED',
-                playerName: playerName,
-                timestamp: Date.now()
-            });
-        }
-    });
-});
-```
-
-**Key insight**: The server becomes the single source of truth. Instead of checking `gameState` on the client, you broadcast events to the server, which timestamps them and relays them to all players. This prevents cheating (client can't fake its buzz-in time) and keeps everyone in sync.
-
-The hard part isn't the code—it's handling network delays, reconnections, and eventual consistency (all clients seeing the same state). This is why real multiplayer games use established frameworks like Photon or Nakama.
-
-### Solution 2: Custom Question Editor
-
-Add a new screen to the setup flow. After players select their names and difficulty, show a "Question Editor" option alongside "Play Now":
+**Step 2: Save questions to localStorage.**
 
 ```javascript
-const render = {
-    questionEditorScreen() {
-        // Show form with inputs for question, answers, correct answer
-        // "Add Question" button appends to a list
-        // "Save & Play" button stores in localStorage and starts game
-    }
-};
+function getCustomQuestions() {
+  try {
+    return JSON.parse(localStorage.getItem('customQuestions') || '[]');
+  } catch { return []; }
+}
 
-// In the setup screen, add a toggle: "Create Custom Questions?"
-// If yes, show the editor before gameplay
-```
-
-The storage pattern:
-```javascript
-const customQuestions = JSON.parse(localStorage.getItem('customQuestions') || '[]');
-
-// When user adds a question:
-customQuestions.push({
-    question: userInput.question,
-    correct_answer: userInput.correct,
-    incorrect_answers: [userInput.wrong1, userInput.wrong2, userInput.wrong3],
-    difficulty: 'custom'
-});
-
-localStorage.setItem('customQuestions', JSON.stringify(customQuestions));
-```
-
-In the game logic, check the category:
-```javascript
-if (gameState.selectedCategory === 'custom') {
-    gameState.questions = JSON.parse(localStorage.getItem('customQuestions') || '[]');
-} else {
-    gameState.questions = await utils.fetchQuestions(...);
+function saveCustomQuestion(q) {
+  const questions = getCustomQuestions();
+  questions.push(q);
+  localStorage.setItem('customQuestions', JSON.stringify(questions));
 }
 ```
 
-### Solution 3: Tournament Mode
+Wire up the form:
 
-The tournament state would track brackets:
+```javascript
+document.getElementById('questionForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = {
+    question: document.getElementById('qText').value,
+    correct_answer: document.getElementById('qCorrect').value,
+    incorrect_answers: [
+      document.getElementById('qWrong1').value,
+      document.getElementById('qWrong2').value,
+      document.getElementById('qWrong3').value,
+    ],
+  };
+  saveCustomQuestion(q);
+  renderQuestionList();
+  e.target.reset();
+});
+```
+
+**Think about it:** What should `renderQuestionList()` do? It should read from `getCustomQuestions()` and display each question so users can see what they've added (and potentially delete ones they don't want).
+
+---
+
+**Step 3: Use custom questions in the game.**
+
+In `utils.fetchQuestions()` (or wherever questions are loaded), check if the custom category is selected:
+
+```javascript
+async fetchQuestions(amount, category) {
+  if (category === 'custom') {
+    const custom = getCustomQuestions();
+    return utils.shuffleArray(custom).slice(0, amount);
+  }
+  // ... existing API fetch code ...
+}
+```
+
+**Step 4: Add "Custom" to the category dropdown** in setup and make sure it routes to the editor screen before gameplay.
+
+The pattern: data in `localStorage` → fetched the same way as API data → flows through the same game pipeline. The rest of the game doesn't know or care where questions came from.
+
+---
+
+### Exercise 2: Timed Round Mode
+
+**The Challenge:** Add an alternative game mode: instead of fixed questions, players get 2 minutes to answer as many questions as possible. At the end, whoever has the highest score wins.
+
+**Where to start:** The current game ends when `currentRound >= selectedRounds`. Timed mode ends when a countdown hits zero. What new state do you need?
+
+*(A `mode` field: `'rounds'` or `'timed'`. A `timeLeft` field for timed mode. A `timerInterval` to manage the countdown.)*
+
+---
+
+**Step 1: Add mode to gameState.**
+
+```javascript
+const gameState = {
+  // ...existing fields...
+  mode: 'rounds',        // 'rounds' | 'timed'
+  gameTimeLeft: 120,     // seconds for timed mode
+  timerInterval: null,
+};
+```
+
+---
+
+**Step 2: Start the game timer in timed mode.**
+
+When the game starts:
+
+```javascript
+if (gameState.mode === 'timed') {
+  gameState.gameTimeLeft = 120;
+  gameState.timerInterval = setInterval(() => {
+    gameState.gameTimeLeft--;
+    render.updateTimer();
+    if (gameState.gameTimeLeft <= 0) {
+      clearInterval(gameState.timerInterval);
+      events.endGame();
+    }
+  }, 1000);
+}
+```
+
+---
+
+**Step 3: Skip the "rounds" check for timed mode.**
+
+In the logic that advances questions, change:
+
+```javascript
+// Old:
+if (gameState.currentRound >= gameState.selectedRounds) {
+  events.endGame();
+}
+
+// New:
+if (gameState.mode === 'rounds' && gameState.currentRound >= gameState.selectedRounds) {
+  events.endGame();
+}
+// Timed mode: just keep going until the timer ends
+```
+
+**Step 4: Display the timer** in the game screen. The `render.updateTimer()` function updates a `<div id="gameTimer">` with the formatted time.
+
+**Think about it:** What happens in timed mode when the API runs out of questions? *(You should pre-fetch extra questions, or re-fetch when the pool runs low. Add a check: if `gameState.questions.length - gameState.currentRound < 5`, fetch more.)*
+
+---
+
+### Exercise 3: Tournament Bracket
+
+**The Challenge:** Add a tournament mode for exactly 4 players: semifinals (P1 vs P2, P3 vs P4), then a final between the two winners. Each match is a 3-question duel.
+
+**Where to start:** Think about the tournament state. What does it need to track that regular game state doesn't?
+
+*(Bracket structure: which players are in which match, who won each match, which stage we're in.)*
+
+---
+
+**Step 1: Define tournament state.**
 
 ```javascript
 const tournament = {
-    players: [...gameState.players],  // 4 players
-    matches: [
-        { players: [0, 1], scores: [0, 0] },  // Match 1
-        { players: [2, 3], scores: [0, 0] }   // Match 2
-    ],
-    finals: null,  // Set after semifinals
-    stage: 'semifinals' // or 'finals'
+  stage: 'semifinals',     // 'semifinals' | 'finals'
+  matches: [
+    { players: [0, 1], scores: [0, 0], winner: null },  // P1 vs P2
+    { players: [2, 3], scores: [0, 0], winner: null },  // P3 vs P4
+  ],
+  finalists: [],
+  champion: null,
 };
 ```
 
-The gameplay loop changes: instead of `selectedRounds` questions, you play 3 questions per match. The winner is whoever has more points after 3 questions.
+---
+
+**Step 2: Modify end-of-match logic.**
+
+When a 3-question match ends, determine the winner and either start the next match or start the final:
 
 ```javascript
-const events = {
-    startTournament() {
-        gameState.screen = 'tournament_bracket';
-        render.tournamentBracketScreen();
-    },
+function endTournamentMatch(matchIndex) {
+  const match = tournament.matches[matchIndex];
+  const [score0, score1] = match.scores;
+  match.winner = score0 >= score1 ? match.players[0] : match.players[1];
 
-    startMatch(matchIndex) {
-        const match = tournament.matches[matchIndex];
-        gameState.players = match.players.map(idx => tournament.players[idx]);
-        gameState.selectedRounds = 3;  // 3-question duel
-        gameState.screen = 'game';
+  if (matchIndex === 0) {
+    // Semifinal 1 done — start semifinal 2
+    tournament.finalists.push(match.winner);
+    startMatch(1);
+  } else if (matchIndex === 1) {
+    // Both semifinals done — start the final
+    tournament.finalists.push(match.winner);
+    tournament.stage = 'finals';
+    startFinal();
+  }
+}
 
-        // When game ends, compare scores to set winner
-        if (gameState.players[0].score > gameState.players[1].score) {
-            tournament.winner = match.players[0];
-        } else {
-            tournament.winner = match.players[1];
-        }
-    }
-};
+function startFinal() {
+  // Set up gameState to play with just the two finalists
+  gameState.players = tournament.finalists.map(idx => allPlayers[idx]);
+  gameState.selectedRounds = 3;
+  gameState.currentRound = 0;
+  // ... reset scores, fetch new questions, render game screen ...
+}
 ```
 
-The hard part: managing which players are in which matches, tracking winners, and advancing them to finals. You'd need a careful state design and clear logic for the transition between matches.
+---
+
+**Step 3: Show the bracket screen.**
+
+Between matches, show a bracket diagram:
+
+```javascript
+render.bracketScreen() {
+  const container = document.getElementById('bracketScreen');
+  container.innerHTML = `
+    <h2>Tournament Bracket</h2>
+    <div class="bracket">
+      <div class="match">
+        ${allPlayers[0].name} vs ${allPlayers[1].name}
+        ${tournament.matches[0].winner !== null
+          ? `→ Winner: ${allPlayers[tournament.matches[0].winner].name}`
+          : ''}
+      </div>
+      <div class="match">
+        ${allPlayers[2].name} vs ${allPlayers[3].name}
+        ...
+      </div>
+    </div>
+    <button id="startNextMatch">Begin Match</button>
+  `;
+}
+```
+
+**The complete picture:** The tournament is a state machine layered on top of the existing game. Each "match" is a complete run of the existing game loop with only 2 of the 4 players active. Reusing the existing game machinery by configuring `gameState` differently is cleaner than rewriting the game.
+
+---
 
 ## What You Learned
 
-| Concept | How We Used It |
-|---------|---------------|
-| **Project Architecture** | Organized code into state, rendering, events, and utilities layers. Large programs need structure. |
-| **State Management** | Central `gameState` object as single source of truth. All data flows through it. |
-| **async/await** | Fetched quiz questions from Open Trivia DB, handled network errors and timeouts. |
-| **DOM Manipulation** | Built dynamic HTML for player setup, score cards, questions, and leaderboard. |
-| **Event Handling** | Coordinated keyboard input from multiple players without race conditions. |
-| **Canvas API** | Created particle effects for celebration animation using 2D drawing primitives. |
-| **Error Handling** | Gracefully fell back to hardcoded questions when API failed. |
-| **Array Methods** | Used `.map()`, `.filter()`, `.forEach()`, `.slice()` to transform and iterate data. |
-| **Template Literals** | Built complex HTML strings with variables cleanly and readably. |
-| **Destructuring** | Extracted properties from API responses and function parameters concisely. |
-| **Code Organization** | Grouped related functions, named things clearly, kept functions small. |
+| Concept | How We Used It | Real-World Connection |
+|---------|---------------|----------------------|
+| **Project architecture** | State / render / events / utils layers | React (state + JSX render), Redux (centralized store + reducers) |
+| **Single source of truth** | `gameState` as the only data store | Redux, Zustand, Pinia — all centralize state |
+| **Pure render functions** | Read state, update DOM, never compute | React components: pure functions of props/state |
+| **Event-driven updates** | Events write state, then call render | React's `setState`, Vuex mutations, Redux dispatch |
+| **async/await** | Fetch questions; fallback to local data | Every production app that talks to an API |
+| **Canvas animation** | Confetti particle system | Same as Chapter 9's game loop — reused here |
+| **Code organization** | Grouped by responsibility, not by type | Every maintainable codebase over ~500 lines |
+| **Fallback strategy** | Local questions if API fails | Offline-first design; graceful degradation |
+
+### The Path Forward
+
+The patterns in Quiz Battle aren't just for games. They're the foundation of modern front-end development.
+
+- **React** makes the render function automatic. You describe what the UI should look like given state; React calls `render()` when state changes.
+- **Redux** formalizes `gameState` with strict rules: state is read-only, changes go through "actions" and "reducers". Same idea, stricter discipline.
+- **Vue and Svelte** make state reactive — write to a reactive variable and the DOM updates automatically. `gameState.screen = 'game'` triggers `render.gameScreen()` for you.
+
+What changes between these tools is the *mechanism*. What stays the same is the *idea*: keep your data in one place, describe how it maps to UI, let events flow through a clear path. You now understand that idea. The tools are just ways to automate it.
 
 ## Building with Claude
 
-You now have the skills to build real applications. But you'll notice something: the jump from 100-line scripts to 500-line applications isn't just more lines—it's a qualitative shift. You need to think about architecture, edge cases, and how pieces interact. This is where tools like Claude become invaluable.
-
-When building larger projects, Claude can help in specific ways. First, rubber-ducking: explain your architecture to Claude before you code. "I want to track player progress, fetch questions from an API, and handle timeout scenarios. Here's my state structure—does it cover everything?" Claude will spot gaps (like missing fields) and suggest simplifications. Second, incremental development: build features one at a time, test them, then ask Claude to help add the next. This prevents the "where do I even start?" paralysis. Third, refactoring: once code works, ask Claude to help reorganize it. "This function is 200 lines—how would you break it up?" You'll learn patterns you can apply to future projects.
-
-The final thing: remember that every large codebase you see—open-source libraries, production web apps, the frameworks themselves—started with these same patterns. They just scaled them up. A React component tree is just nested objects with state. A Redux store is a centralized state management system like gameState. A Webpack config is just a function that transforms code. The fundamentals don't change; they amplify. You now know the fundamentals. You're ready to learn the tools that scale them.
-
-Keep building. Each project teaches you something new about what works and what doesn't. The next time you hit a problem—"how do I handle multiple concurrent actions?" or "how do I keep my code organized as it grows?"—you'll remember Quiz Battle and have a pattern to start from. That's how expertise develops: not from reading, but from doing.
+- "Add a live score ticker that shows points flying from the question card to the winner's score card when they answer correctly."
+- "Add a 'double or nothing' wildcard: once per game, a player can bet their current score on the next question."
+- "Add configurable question categories — show a multi-select grid so players can pick which topics to include."
+- "Add a question explanation: after each answer, show a one-sentence fact about the correct answer. Use the AI to generate these."

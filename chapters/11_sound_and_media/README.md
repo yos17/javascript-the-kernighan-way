@@ -1,24 +1,44 @@
 # Chapter 11: Sound and Media
 
-Your browser is a synthesizer. We'll build a drum machine that generates every sound from scratch using the Web Audio API — no audio files, no external libraries, just math and oscillators.
+## Why Web Audio Exists
 
----
+Historically, playing sound in a browser required loading an audio file and pressing play. This works for music and sound effects — but it's terrible for musical instruments and synthesizers. You can't have a 10ms delay between a key press and a note playing. You can't synthesize novel sounds from scratch. You can't schedule music with sample-accurate precision.
+
+The Web Audio API solves all of this by exposing a **low-level audio processing graph** in JavaScript. You build chains of audio nodes that generate, filter, mix, and output sound — entirely in memory, no files needed.
+
+Your browser is a synthesizer. This chapter shows you how to play it.
 
 ## The Program: Beat Maker
 
-Open `drumachine.html`. Click pads to hear sounds, toggle steps in the sequencer grid, set your BPM, and press Play to loop your beat. Keyboard shortcuts: `Q`–`I` for the top row of pads, `A`–`K` for the bottom row, `Space` to play/stop.
+A drum machine with 8 tracks and 16 steps per bar. Click pads to hear sounds, toggle steps in the sequencer grid, set your BPM, and press Play to loop your beat. Every sound is synthesized from scratch — no audio files.
 
-*(Full source is in `drumachine.html` — the README shows key excerpts below.)*
-
----
+Open `drumachine.html` to use it. Keyboard shortcuts: `Q`–`I` for the top row of pads, `A`–`K` for the bottom row, `Space` to play/stop.
 
 ## How It Works
 
-### The Web Audio API
+### The Audio Graph
 
-Browsers include a complete audio engine. You access it through an `AudioContext`:
+Web Audio processes sound as a **directed graph** of nodes. Each node does one job (generate a tone, control volume, filter frequencies). Nodes connect together, flowing into `ctx.destination` (your speakers):
 
-```js
+```
+  OscillatorNode         BufferSourceNode
+  (sine wave tone)       (noise buffer)
+        │                       │
+        ▼                       ▼
+    GainNode               BiquadFilterNode
+   (volume)                 (frequency filter)
+        │                       │
+        └──────────┬────────────┘
+                   ▼
+             ctx.destination
+              (your speakers)
+```
+
+Every sound in the drum machine is a small graph like this, assembled and discarded for each individual hit.
+
+### Lazy Context Creation
+
+```javascript
 let audioCtx = null;
 
 function getCtx() {
@@ -28,29 +48,26 @@ function getCtx() {
 }
 ```
 
-We lazily create the context on first use — browsers require a user gesture before audio can play, so creating it on page load would fail silently. Calling `resume()` handles the case where the browser suspended the context.
+**Why not create the AudioContext on page load?** Browsers require a user gesture (click, keypress) before audio can play. Creating the context before a gesture silently fails or throws. Creating it on first use (lazy initialization) guarantees a gesture has happened.
 
-### The Audio Graph
+### Synthesizing Drum Sounds
 
-Web Audio works as a graph of nodes connected together, flowing into `ctx.destination` (your speakers):
+**Kick drum**: A sine wave that rapidly drops from 150Hz to near silence. Low frequency = thump.
 
-```
-OscillatorNode → GainNode → destination
-```
-
-Every sound is built by chaining nodes:
-
-```js
+```javascript
 function kick(time) {
-  const ctx = getCtx();
+  const ctx  = getCtx();
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
 
   osc.connect(gain);
   gain.connect(ctx.destination);
 
+  // Frequency drops from 150Hz to ~0 over 0.5 seconds
   osc.frequency.setValueAtTime(150, time);
   osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+
+  // Volume drops from 1 to near-zero
   gain.gain.setValueAtTime(1, time);
   gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
 
@@ -59,49 +76,63 @@ function kick(time) {
 }
 ```
 
-A kick drum is just a sine wave that rapidly drops in pitch. The `exponentialRampToValueAtTime` makes the frequency and volume decay realistically — linear ramps sound unnatural for audio.
+**Why exponential ramp, not linear?** Human hearing is logarithmic — we perceive pitch and volume on a logarithmic scale. A linear frequency drop from 150Hz to 0Hz sounds wrong. An exponential drop sounds natural.
 
-### Scheduled vs. Immediate Audio
+**Snare**: White noise filtered to emphasize mid-high frequencies, plus a short tone burst.
 
-The `time` parameter is crucial. Web Audio operates on a separate high-precision clock (`ctx.currentTime`). You *schedule* sounds rather than playing them immediately:
+White noise is random samples — all frequencies at equal amplitude:
 
-```js
-osc.start(ctx.currentTime);         // play right now
-osc.start(ctx.currentTime + 0.5);   // play half a second from now
-```
-
-This is far more accurate than `setTimeout` for music. Timer callbacks can be delayed by JavaScript event processing; scheduled audio plays at the exact sample.
-
-### Synthesizing Drum Sounds
-
-**Kick**: Low-frequency sine wave with fast pitch drop.
-
-**Snare**: White noise (random samples) filtered high-pass, plus a mid-tone sine burst.
-
-**Hi-Hat**: White noise filtered as bandpass at 8kHz, very short duration.
-
-**Clap**: Three rapid bursts of bandpass-filtered noise, slightly offset in time.
-
-```js
-// White noise buffer — the raw material for snare, hat, clap
-const bufSize = ctx.sampleRate * 0.2;
+```javascript
+const bufSize = ctx.sampleRate * 0.2;  // 0.2 seconds of samples
 const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-const data = buf.getChannelData(0);
-for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+const data = buf.getChannelData(0);    // Float32Array
+for (let i = 0; i < bufSize; i++) {
+  data[i] = Math.random() * 2 - 1;    // random values -1 to +1
+}
 ```
 
-`getChannelData` returns a `Float32Array` of audio samples. Filling it with random values between -1 and 1 creates white noise — all frequencies at equal amplitude.
+**Hi-hat**: White noise through a bandpass filter at 8kHz, very short (0.05–0.15 seconds). High frequency + brief duration = that metallic hiss.
+
+**Clap**: Three rapid bursts of bandpass-filtered noise, offset by ~15ms. The layering creates a natural room-reverb feel.
+
+### Scheduled Audio vs. Immediate Audio
+
+Web Audio has its own high-precision clock: `ctx.currentTime`. You *schedule* sounds at specific times instead of playing them "now":
+
+```javascript
+osc.start(ctx.currentTime);         // play immediately
+osc.start(ctx.currentTime + 0.5);   // play in 0.5 seconds
+osc.start(ctx.currentTime + nextStepTime); // play at exact beat
+```
+
+**Why schedule instead of play immediately?** `setTimeout` has ~4ms jitter — it fires when the JavaScript engine gets to it, which varies based on what else is running. At 120 BPM, a 16th note is 125ms. A 4ms timing error is 3% off — noticeable to musicians.
+
+Web Audio scheduling bypasses the JavaScript event loop entirely. Once scheduled, sounds play at the exact sample regardless of what JavaScript does next.
 
 ### The Lookahead Scheduler
 
-Precise sequencing uses a lookahead pattern:
+The drum machine uses a classic pattern for precise sequencing:
 
-```js
+```
+Timeline:
+  ctx.currentTime ─────────────────────────────────────────►
+                  │← LOOKAHEAD (100ms) →│
+                  ├─────────────────────┤
+                  │  Steps to schedule  │
+                  │  next tick (25ms)   │
+                  ├──────┤
+
+Every 25ms, the scheduler runs and pre-schedules any steps
+falling within the next 100ms window.
+```
+
+```javascript
 const LOOKAHEAD = 0.1;        // schedule 100ms ahead
 const SCHEDULE_INTERVAL = 25; // check every 25ms
 
 function scheduler() {
   const ctx = getCtx();
+  // Schedule all steps in the next 100ms window
   while (nextStepTime < ctx.currentTime + LOOKAHEAD) {
     scheduleStep(currentStep, nextStepTime);
     nextStepTime += stepDuration();
@@ -111,195 +142,290 @@ function scheduler() {
 }
 ```
 
-The scheduler runs every 25ms but schedules any steps falling within the next 100ms. This overlap ensures no steps are missed even if the JavaScript thread is briefly busy. It's the standard pattern for Web Audio sequencers.
+**Why the overlap?** If the scheduler checks every 25ms and schedules 100ms ahead, each step is scheduled at least twice before it plays. This redundancy ensures no steps are missed even if JavaScript is briefly busy (e.g., during DOM updates, garbage collection).
 
-### Separating Audio Timing from UI Updates
+### Separating Audio Timing from Visual Timing
 
-Audio is scheduled in the future; the UI highlight must follow *when that future arrives*:
+Audio is scheduled in the future. The UI highlight needs to follow *when that future arrives*:
 
-```js
-const timeUntil = (nextStepTime - ctx.currentTime) * 1000;
-setTimeout(() => highlightStep(stepToHighlight), Math.max(0, timeUntil));
+```javascript
+// When scheduling step S to play at time T:
+const timeUntilMs = (stepTime - ctx.currentTime) * 1000;
+setTimeout(() => highlightStep(stepIndex), Math.max(0, timeUntilMs));
 ```
 
-We calculate how many milliseconds until the scheduled step plays, then use `setTimeout` to visually highlight it at the right moment. Audio scheduling and DOM animation are separate concerns on separate timers.
+The audio plays at the exact scheduled time. The visual highlight is triggered by a `setTimeout` set for the same moment. Audio scheduling and DOM updates are completely separate — they just happen to land at the same time.
 
-### Data Model: Pattern as 2D Array
+### The Pattern as 2D Array
 
-The beat pattern is a 2D array — rows are tracks, columns are steps:
+```
+           Steps:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+  Kick:           [T][F][F][F][T][F][F][F][T][F][F][F][T][F][F][F]
+  Snare:          [F][F][F][F][T][F][F][F][F][F][F][F][T][F][F][F]
+  Hi-Hat:         [T][T][T][T][T][T][T][T][T][T][T][T][T][T][T][T]
+```
 
-```js
+Stored as a 2D array: `pattern[track][step]`
+
+```javascript
 let pattern = TRACKS.map(() => new Array(STEPS).fill(false));
-```
 
-Toggling a step:
-```js
+// Toggle a step
 step.addEventListener('click', () => {
   pattern[ti][s] = !pattern[ti][s];
   step.classList.toggle('on', pattern[ti][s]);
 });
-```
 
-When the sequencer reaches step `s`, it checks `pattern[ti][s]` for each track and fires any that are `true`. Simple boolean array, clean separation between data and audio.
-
-### BPM to Step Duration
-
-```js
-function stepDuration() {
-  return 60 / bpm() / 4; // 16th notes
-}
-```
-
-At 120 BPM: `60 / 120 / 4 = 0.125` seconds per 16th note — eight notes per second. Changing BPM only affects new scheduling calls; already-scheduled notes play unchanged.
-
----
-
-## Try It
-
-1. **Record a pattern**: start with kick on steps 1, 5, 9, 13 — snare on 5, 13 — hi-hat on every step. This is a basic 4/4 beat.
-2. **Swing**: add `(step % 2 === 1 ? 0.02 : 0)` to `nextStepTime` for odd steps. Even steps play on the grid; odd steps are pushed slightly late — classic swing feel.
-3. **Volume per track**: add a gain node between each synth and `destination`, controlled by a per-track slider.
-4. **Save patterns**: serialize `pattern` to JSON and store with `localStorage.setItem('beat', JSON.stringify(pattern))`. Load on startup.
-
----
-
-## Exercises
-
-### Exercise 1 — Mute/Solo Tracks
-
-Add a mute button (🔇) and solo button (S) to each track row. Muted tracks don't play even if their steps are on. Solo plays only that track.
-
-**Spec:**
-- Per-track `muted` boolean array
-- Clicking mute toggles it and grays out the track's steps
-- Solo un-mutes only that track, mutes all others
-- Clicking solo again returns to previous mute state
-
-### Exercise 2 — Pattern Copy/Paste
-
-Add Copy and Paste buttons that let you duplicate the current pattern to a second pattern slot. Toggle between pattern A and pattern B.
-
-**Spec:**
-- Two buttons: `[A]` and `[B]`
-- Active pattern highlighted
-- Switching patterns updates the grid display
-- A "Copy A → B" button duplicates the current pattern
-
-### Exercise 3 — Pitch Pads
-
-Add a second row of 8 pads tuned to a pentatonic scale (e.g., C4, D4, E4, G4, A4, C5, D5, E5). Each pad plays a melodic tone using an `OscillatorNode` with a short envelope.
-
-**Spec:**
-- Use frequencies: 261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3 Hz
-- Use a sawtooth or triangle oscillator with a 0.3s envelope
-- Add a `lowpass` filter at ~2000 Hz for a mellow sound
-- These pads can also be recorded into a 9th track in the sequencer
-
----
-
-## Solutions
-
-### Solution 1 — Mute/Solo
-
-```js
-let mutedTracks = new Array(TRACKS.length).fill(false);
-
-// In scheduleStep, change the condition:
+// In the scheduler, check if a track fires on this step
 function scheduleStep(step, time) {
   for (let ti = 0; ti < TRACKS.length; ti++) {
-    if (!mutedTracks[ti] && pattern[ti][step]) TRACKS[ti].play(time);
+    if (pattern[ti][step]) TRACKS[ti].play(time);
   }
 }
+```
 
-// Add to each track row:
+Simple, clean. The entire musical state is a 2D boolean array.
+
+---
+
+## Guided Exercises
+
+### Exercise 1: Mute and Solo Tracks
+
+**The Challenge:** Add a mute button (🔇) to each track row. Muted tracks don't play even if their steps are on. Add a solo button (S) that mutes all other tracks, so only that one plays.
+
+**Where to start:** You need to track which tracks are muted. What data structure holds this? Where does it get checked?
+
+*(An array of booleans: `mutedTracks[ti]` is `true` if track `ti` is muted. It gets checked in `scheduleStep`.)*
+
+---
+
+**Step 1: Add the muted state.**
+
+```javascript
+let mutedTracks = new Array(TRACKS.length).fill(false);
+```
+
+---
+
+**Step 2: Check muted in scheduleStep.**
+
+Find `scheduleStep` and add one condition:
+
+```javascript
+function scheduleStep(step, time) {
+  for (let ti = 0; ti < TRACKS.length; ti++) {
+    if (!mutedTracks[ti] && pattern[ti][step]) {
+      TRACKS[ti].play(time);
+    }
+  }
+}
+```
+
+**Test it now:** Even without buttons, you can test by typing `mutedTracks[0] = true` in the console and pressing Play. The kick should go silent.
+
+---
+
+**Step 3: Add mute buttons to the HTML.**
+
+You need to add a button to each track row. Find where rows are built (in the script that creates the sequencer grid) and add:
+
+```javascript
 const muteBtn = document.createElement('button');
 muteBtn.textContent = '🔇';
+muteBtn.title = 'Mute';
 muteBtn.addEventListener('click', () => {
   mutedTracks[ti] = !mutedTracks[ti];
   muteBtn.style.opacity = mutedTracks[ti] ? '1' : '0.3';
+  // Gray out the steps visually
   row.querySelectorAll('.step').forEach(s => {
-    s.style.opacity = mutedTracks[ti] ? '0.3' : '1';
+    s.style.opacity = mutedTracks[ti] ? '0.4' : '1';
   });
+});
+row.insertBefore(muteBtn, row.firstChild);
+```
+
+---
+
+**Step 4: Add solo.**
+
+Solo is trickier — it needs to remember the previous mute state so it can restore when un-soloed:
+
+```javascript
+let previousMuteState = null;
+
+const soloBtn = document.createElement('button');
+soloBtn.textContent = 'S';
+soloBtn.addEventListener('click', () => {
+  if (previousMuteState !== null) {
+    // Currently soloed — restore previous state
+    mutedTracks = [...previousMuteState];
+    previousMuteState = null;
+    soloBtn.style.background = '';
+  } else {
+    // Solo this track — mute all others
+    previousMuteState = [...mutedTracks];
+    mutedTracks = mutedTracks.map((_, i) => i !== ti);  // all muted except ti
+    soloBtn.style.background = '#FFD700';
+  }
+  // Sync visual state of mute buttons...
 });
 ```
 
-### Solution 2 — Pattern Copy/Paste
+**Think about it:** The spread `[...mutedTracks]` creates a copy of the array. Why do you need a copy instead of `previousMuteState = mutedTracks`? *(Because `mutedTracks` is later reassigned. If you stored a reference, `previousMuteState` would point to the new array, not the saved state.)*
 
-```js
-let patterns = [
-  TRACKS.map(() => new Array(STEPS).fill(false)),
-  TRACKS.map(() => new Array(STEPS).fill(false))
-];
-let activePattern = 0;
+---
 
-function switchPattern(index) {
-  activePattern = index;
-  pattern = patterns[index];
+### Exercise 2: Save and Load Patterns
+
+**The Challenge:** Add Save and Load buttons. Save stores the current pattern to `localStorage`. Load restores it. Add A/B slots so users can save two patterns and switch between them.
+
+**Where to start:** The pattern is a 2D array of booleans. `JSON.stringify` can serialize it. `JSON.parse` can restore it.
+
+---
+
+**Step 1: Save the pattern.**
+
+```javascript
+function savePattern(slot) {
+  localStorage.setItem(`beat-pattern-${slot}`, JSON.stringify(pattern));
+}
+```
+
+---
+
+**Step 2: Load the pattern.**
+
+Loading is trickier — after loading the data, you also need to update the visual state of every step button:
+
+```javascript
+function loadPattern(slot) {
+  const saved = localStorage.getItem(`beat-pattern-${slot}`);
+  if (!saved) return alert('No pattern saved in this slot.');
+
+  pattern = JSON.parse(saved);
+
+  // Sync the step buttons with the loaded pattern
   document.querySelectorAll('.step').forEach((el, i) => {
     const ti = Math.floor(i / STEPS);
-    const s = i % STEPS;
+    const s  = i % STEPS;
     el.classList.toggle('on', pattern[ti][s]);
   });
 }
+```
 
-document.getElementById('copyBtn').addEventListener('click', () => {
-  const other = 1 - activePattern;
-  patterns[other] = patterns[activePattern].map(row => [...row]);
+**Think about it:** Why do you need to update the visual state? *(The step buttons have CSS classes reflecting the current pattern. Loading new data changes `pattern` but not the DOM. You must sync them.)*
+
+---
+
+**Step 3: Add A/B slot switching.**
+
+```javascript
+let activeSlot = 'A';
+
+document.getElementById('slotA').addEventListener('click', () => loadPattern('A'));
+document.getElementById('slotB').addEventListener('click', () => loadPattern('B'));
+document.getElementById('saveA').addEventListener('click', () => savePattern('A'));
+document.getElementById('saveB').addEventListener('click', () => savePattern('B'));
+```
+
+**The complete picture:** Serializing complex state (2D array → JSON string → localStorage → JSON parse → 2D array) is exactly how applications persist data. The same pattern works for game saves, editor preferences, and user settings.
+
+---
+
+### Exercise 3: Swing Feel
+
+**The Challenge:** Add swing: odd-numbered steps are pushed slightly late, creating a shuffle rhythm. A slider controls the swing amount from 0% (straight) to 50% (triplet swing).
+
+**Where to start:** Swing means some steps play "on time" and others play "late". The late amount is a fraction of a step duration.
+
+---
+
+**Step 1: Understand swing mathematically.**
+
+In a straight rhythm, steps are equally spaced:
+```
+Step:   1  2  3  4  5  6  7  8
+Time:   0 .5 1 1.5 2 2.5 3 3.5  (in beats)
+```
+
+With swing, odd steps (2, 4, 6, 8) are pushed late by `swingAmount * stepDuration`:
+```
+Step:   1    2    3    4    5    6    7    8
+Time:   0   .6  1  1.6  2  2.6  3  3.6  (at 20% swing)
+```
+
+The effect: the beat "bounces" instead of marching straight.
+
+---
+
+**Step 2: Add the swing state.**
+
+```javascript
+let swingAmount = 0;  // 0.0 to 0.5
+```
+
+Add a range input in the HTML:
+```html
+<label>Swing: <input type="range" id="swingSlider" min="0" max="50" value="0"></label>
+```
+
+```javascript
+document.getElementById('swingSlider').addEventListener('input', e => {
+  swingAmount = parseInt(e.target.value) / 100;
 });
 ```
 
-### Solution 3 — Pitch Pads
+---
 
-```js
-const PENTATONIC = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3];
+**Step 3: Apply swing in the scheduler.**
 
-function playTone(freq, time) {
-  const ctx = getCtx();
-  const osc = ctx.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.value = freq;
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 2000;
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.4, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-  osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
-  osc.start(time); osc.stop(time + 0.3);
+When calculating `nextStepTime`, add the swing offset for odd steps:
+
+```javascript
+function scheduleStep(step, time) {
+  // Odd steps get pushed late by swingAmount
+  const swingOffset = (step % 2 === 1) ? swingAmount * stepDuration() : 0;
+  const scheduledTime = time + swingOffset;
+
+  for (let ti = 0; ti < TRACKS.length; ti++) {
+    if (!mutedTracks[ti] && pattern[ti][step]) {
+      TRACKS[ti].play(scheduledTime);
+    }
+  }
 }
-
-PENTATONIC.forEach((freq, i) => {
-  const pad = document.createElement('button');
-  pad.className = 'pad pitch-pad';
-  pad.textContent = ['C4','D4','E4','G4','A4','C5','D5','E5'][i];
-  pad.addEventListener('click', () => playTone(freq, getCtx().currentTime));
-  document.getElementById('pitchPads').appendChild(pad);
-});
 ```
+
+**Test it:** Set a simple kick pattern (steps 1, 5, 9, 13) and hi-hat on every step. Move the swing slider to 30–40%. The groove should shift from mechanical to human-feeling.
+
+**Why does this work?** Professional drummers naturally push certain beats slightly late. The mathematical model (push every other 16th note) is a simplified but convincing approximation of human swing.
 
 ---
 
 ## What You Learned
 
-| Concept | Where |
-|---|---|
-| `AudioContext` | `getCtx()` — entry point to Web Audio |
-| `OscillatorNode` | Kick, snare tone, rim, bass, pitch pads |
-| `GainNode` | Volume envelope on every sound |
-| `BiquadFilterNode` | Highpass (snare noise), bandpass (hi-hat) |
-| `AudioBuffer` + `BufferSource` | White noise generation |
-| Audio scheduling | `setValueAtTime`, `exponentialRampToValueAtTime` |
-| `ctx.currentTime` | High-precision audio clock |
-| Lookahead scheduler | `scheduler()` with `setTimeout` + `LOOKAHEAD` |
-| Audio/UI time separation | `setTimeout` delay for visual highlight |
-| `Float32Array` | Raw audio sample buffer |
-| 2D array as data model | `pattern[track][step]` |
-| BPM → duration math | `60 / bpm / 4` for 16th notes |
+| Concept | Where Used | Real-World Use |
+|---------|-----------|----------------|
+| `AudioContext` | Entry point to Web Audio | All Web Audio apps; lazy-init for gesture requirement |
+| `OscillatorNode` | Kick, snare tone, pitch pads | Synthesizers, alert sounds, test tones |
+| `GainNode` | Volume envelope on every sound | Mixing, fading, dynamics |
+| `BiquadFilterNode` | Snare highpass, hi-hat bandpass | EQ, wah-wah, telephone effect |
+| `AudioBuffer` + noise | Snare, hi-hat, clap bodies | Percussion, wind, texture synthesis |
+| `exponentialRampToValueAtTime` | Pitch drop (kick), volume decay | All natural-sounding audio envelopes |
+| `ctx.currentTime` | Audio scheduling clock | Precise music timing |
+| Lookahead scheduler | 25ms check, 100ms window | Standard pattern in all Web Audio sequencers |
+| 2D array data model | `pattern[track][step]` | Matrix data: image pixels, game boards, grids |
 
----
+### Real-World Connections
+
+- **Tone.js** is a Web Audio framework that wraps everything in this chapter with a musical API. `new Tone.Oscillator(440, 'sine').toDestination().start()` is the same as the kick function, simplified. Learning Web Audio directly means you understand what Tone.js is doing.
+- **Digital Audio Workstations** (DAWs — Logic, Ableton, Pro Tools) are sophisticated versions of the drum machine you built. The same concepts: audio graphs, scheduling, step sequencers.
+- **Game audio engines** (Howler.js, FMOD) use Web Audio under the hood for spatial audio, dynamic mixing, and precise timing.
+- The **lookahead scheduler** pattern appears in other high-precision timing contexts: animation systems, real-time data streaming, and audio/video synchronization.
 
 ## Building with Claude
 
-- *"Add a reverb effect using a ConvolverNode with a programmatically generated impulse response — a short burst of decaying noise."*
-- *"Add a pitch-shifting effect: when the user holds Shift and clicks a drum pad, play it at 1.5x or 0.75x pitch using a playbackRate on the BufferSource."*
-- *"Export the current pattern as a downloadable WAV file by rendering the full 1-bar loop offline using OfflineAudioContext."*
+- "Add a reverb effect using a ConvolverNode with a programmatically generated impulse response — decaying white noise."
+- "Add a pitch-shifting effect: Shift+click on a pad plays it at 1.5× or 0.75× pitch using BufferSource playbackRate."
+- "Export the current 1-bar loop as a downloadable WAV file using OfflineAudioContext."
+- "Add a volume knob per track using a GainNode in each track's signal chain."
