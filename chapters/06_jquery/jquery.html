@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own jQuery — Chapter 6</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111827;
+      color: #e5e7eb;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 0;
+    }
+
+    /* ─── Site nav ─────────────────────────────── */
+    nav {
+      background: #1f2937;
+      border-bottom: 1px solid #374151;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .nav-brand {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #f9fafb;
+      padding: 1rem 1rem 1rem 0;
+      margin-right: 1rem;
+    }
+    .nav-brand span { color: #34d399; }
+    .nav-link {
+      padding: 1rem 0.85rem;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .nav-link:hover { color: #f9fafb; }
+    .nav-link.active { color: #34d399; border-bottom-color: #34d399; }
+
+    /* ─── Pages ────────────────────────────────── */
+    .page { display: none; padding: 2rem; max-width: 860px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    h1 { font-size: 1.8rem; font-weight: 700; color: #f9fafb; margin-bottom: 0.4rem; }
+    h2 { font-size: 1.2rem; font-weight: 600; color: #d1fae5; margin: 1.5rem 0 0.75rem; }
+    p  { color: #d1d5db; line-height: 1.65; margin-bottom: 0.75rem; }
+
+    /* ─── Accordion ────────────────────────────── */
+    .accordion { border: 1px solid #374151; border-radius: 8px; overflow: hidden; margin-bottom: 1rem; }
+    .accordion-item { border-top: 1px solid #374151; }
+    .accordion-item:first-child { border-top: none; }
+    .accordion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.9rem 1.1rem;
+      cursor: pointer;
+      background: #1f2937;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: background 0.15s;
+    }
+    .accordion-header:hover { background: #27374a; }
+    .accordion-body {
+      display: none;
+      padding: 1rem 1.1rem;
+      background: #111827;
+      color: #d1d5db;
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+    .accordion-icon { transition: transform 0.2s; font-size: 0.8rem; color: #6b7280; }
+    .accordion-item.open .accordion-body { display: block; }
+    .accordion-item.open .accordion-icon { transform: rotate(180deg); }
+
+    /* ─── Tabs ─────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid #374151;
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      padding: 0.6rem 1.1rem;
+      cursor: pointer;
+      color: #9ca3af;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: #f9fafb; }
+    .tab-btn.active { color: #34d399; border-bottom-color: #34d399; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ─── Cards ────────────────────────────────── */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .card {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      padding: 1rem;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .card:hover { border-color: #34d399; transform: translateY(-2px); }
+    .card-title { font-weight: 600; color: #f9fafb; margin-bottom: 0.3rem; }
+    .card-body  { font-size: 0.85rem; color: #9ca3af; }
+    .card.hidden { display: none; }
+    .badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.1rem 0.45rem;
+      border-radius: 3px;
+      margin-bottom: 0.4rem;
+    }
+
+    /* ─── Modal ────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      padding: 1.5rem;
+      max-width: 420px;
+      width: 90%;
+      position: relative;
+    }
+    .modal h3 { color: #f9fafb; margin-bottom: 0.5rem; }
+    .modal p  { color: #9ca3af; font-size: 0.9rem; }
+    .modal-close {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.9rem;
+      cursor: pointer;
+      color: #6b7280;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .modal-close:hover { color: #f9fafb; }
+
+    /* ─── Buttons ──────────────────────────────── */
+    button, .btn {
+      background: #065f46;
+      border: none;
+      border-radius: 6px;
+      color: #d1fae5;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.45rem 0.9rem;
+      transition: background 0.15s;
+      display: inline-block;
+    }
+    button:hover, .btn:hover { background: #047857; }
+    button.outline, .btn.outline {
+      background: transparent;
+      border: 1px solid #374151;
+      color: #9ca3af;
+    }
+    button.outline:hover { border-color: #6b7280; color: #f9fafb; }
+    button.danger { background: #7f1d1d; color: #fca5a5; }
+    button.danger:hover { background: #991b1b; }
+
+    /* ─── Demo controls ────────────────────────── */
+    .control-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+    input[type="text"] {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      color: #e5e7eb;
+      font-size: 0.9rem;
+      padding: 0.4rem 0.7rem;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #34d399; }
+
+    /* ─── REPL ─────────────────────────────────── */
+    .repl-wrap { background: #0a0f1a; border: 1px solid #1f2937; border-radius: 8px; padding: 1rem; }
+    .repl-input {
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 5px;
+      color: #a5f3fc;
+      padding: 0.5rem 0.7rem;
+      width: 100%;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+    .repl-output {
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      color: #86efac;
+      min-height: 40px;
+      white-space: pre-wrap;
+    }
+    .repl-output.err { color: #f87171; }
+
+    code { background: #1f2937; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.85em; color: #34d399; }
+
+    /* ─── Live style tester ────────────────────── */
+    .style-target {
+      background: #1f2937;
+      border: 2px solid #374151;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+      font-size: 1rem;
+      transition: all 0.2s;
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Navigation built with $ ──────────────────────────────────────── -->
+<nav>
+  <div class="nav-brand">Mini<span>$</span></div>
+  <div class="nav-link active" data-page="home">Home</div>
+  <div class="nav-link" data-page="components">Components</div>
+  <div class="nav-link" data-page="repl">REPL</div>
+  <div class="nav-link" data-page="styles">Styles</div>
+</nav>
+
+<!-- ─── Pages ─────────────────────────────────────────────────────────── -->
+
+<div id="home" class="page active">
+  <h1>Build Your Own <span style="color:#34d399">jQuery</span></h1>
+  <p style="color:#9ca3af;margin-bottom:1.5rem">Chapter 6 — DOM traversal, manipulation, and method chaining from scratch.</p>
+  <p>This entire page is driven by a 100-line <code>$</code> function you built yourself. Every tab switch,
+  accordion toggle, modal open, and card filter calls methods on wrapped element sets — with full
+  chaining just like real jQuery. Inspect the source to see how.</p>
+  <h2>What you built</h2>
+  <div class="accordion" id="home-accordion">
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <span>Selector engine</span><span class="accordion-icon">▼</span>
+      </div>
+      <div class="accordion-body">
+        <code>$('selector')</code> runs <code>querySelectorAll</code> and wraps the results in an object
+        with chainable methods. Pass an Element directly and it wraps that too.
+      </div>
+    </div>
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <span>Method chaining</span><span class="accordion-icon">▼</span>
+      </div>
+      <div class="accordion-body">
+        Every method that changes the DOM returns <code>this</code>, so you can chain:
+        <code>$('.btn').addClass('active').css('color', 'red').on('click', fn)</code>.
+      </div>
+    </div>
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <span>Event delegation</span><span class="accordion-icon">▼</span>
+      </div>
+      <div class="accordion-body">
+        <code>$.delegate(parent, event, selector, fn)</code> attaches one listener on a
+        parent and checks <code>closest(selector)</code> on each event — efficient for dynamic lists.
+      </div>
+    </div>
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <span>DOM manipulation</span><span class="accordion-icon">▼</span>
+      </div>
+      <div class="accordion-body">
+        <code>.html()</code>, <code>.text()</code>, <code>.append()</code>, <code>.prepend()</code>,
+        <code>.remove()</code>, <code>.empty()</code> — the same API surface as jQuery, built from raw
+        browser APIs.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="components" class="page">
+  <h1>Components</h1>
+  <p>All interactive behaviour is wired entirely through <code>$</code>.</p>
+
+  <h2>Tabs</h2>
+  <div class="tab-bar" id="demo-tabs">
+    <div class="tab-btn active" data-tab="team">Team</div>
+    <div class="tab-btn" data-tab="projects">Projects</div>
+    <div class="tab-btn" data-tab="settings">Settings</div>
+  </div>
+  <div id="tab-team" class="tab-panel active">
+    <div class="card-grid" id="team-cards">
+      <div class="card" data-role="eng">
+        <span class="badge" style="background:#1e3a5f;color:#93c5fd">Engineering</span>
+        <div class="card-title">Ada Lovelace</div>
+        <div class="card-body">First programmer. Wrote the first algorithm for Babbage's machine.</div>
+      </div>
+      <div class="card" data-role="design">
+        <span class="badge" style="background:#4a1942;color:#e879f9">Design</span>
+        <div class="card-title">Susan Kare</div>
+        <div class="card-body">Designed the original Mac icons. Invented the trash can and the hand cursor.</div>
+      </div>
+      <div class="card" data-role="eng">
+        <span class="badge" style="background:#1e3a5f;color:#93c5fd">Engineering</span>
+        <div class="card-title">Grace Hopper</div>
+        <div class="card-body">Created the first compiler. Coined the term "debugging".</div>
+      </div>
+      <div class="card" data-role="pm">
+        <span class="badge" style="background:#14532d;color:#86efac">Product</span>
+        <div class="card-title">Margaret Hamilton</div>
+        <div class="card-body">Led Apollo software development. Coined "software engineering".</div>
+      </div>
+    </div>
+    <div class="control-row" style="margin-top:0.75rem">
+      <span style="font-size:0.85rem;color:#6b7280">Filter:</span>
+      <button class="outline" data-filter="">All</button>
+      <button class="outline" data-filter="eng">Engineering</button>
+      <button class="outline" data-filter="design">Design</button>
+      <button class="outline" data-filter="pm">Product</button>
+    </div>
+  </div>
+  <div id="tab-projects" class="tab-panel">
+    <p>Three projects — click <strong>View</strong> to open a modal powered by <code>$</code>.</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Project Apollo</div>
+        <div class="card-body">Mission control dashboard for lunar tracking.</div>
+        <div style="margin-top:0.6rem"><button class="open-modal" data-title="Project Apollo" data-body="Real-time telemetry, trajectory plotting, and crew communication relay.">View</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">ENIAC Reborn</div>
+        <div class="card-body">A web-based simulator of the first general-purpose computer.</div>
+        <div style="margin-top:0.6rem"><button class="open-modal" data-title="ENIAC Reborn" data-body="Simulates 18,000 vacuum tubes at 5000 operations per second. Plug-in wiring included.">View</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Debugging Suite</div>
+        <div class="card-body">Named in honour of Grace Hopper's actual bug.</div>
+        <div style="margin-top:0.6rem"><button class="open-modal" data-title="Debugging Suite" data-body="Automated log analysis, stack trace visualisation, and a moth-themed mascot.">View</button></div>
+      </div>
+    </div>
+  </div>
+  <div id="tab-settings" class="tab-panel">
+    <p>Settings panel — demonstrates <code>.val()</code> and dynamic <code>.html()</code> updates.</p>
+    <div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px">
+      <div>
+        <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.3rem">Team name</div>
+        <input type="text" id="team-name" value="The Pioneers" style="width:100%">
+      </div>
+      <div>
+        <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.3rem">Preview</div>
+        <div id="team-preview" style="font-size:1rem;font-weight:600;color:#34d399">The Pioneers</div>
+      </div>
+      <button id="save-settings">Save</button>
+      <div id="save-msg" style="font-size:0.8rem;color:#34d399;display:none">Saved!</div>
+    </div>
+  </div>
+</div>
+
+<div id="repl" class="page">
+  <h1>Live REPL</h1>
+  <p>Type a <code>$</code> expression and press Enter. The result is printed below, and the DOM is updated live.</p>
+  <div class="repl-wrap">
+    <input type="text" class="repl-input" id="repl-input"
+      value="$('.repl-target').css('background','#065f46').text('Changed by $!')">
+    <div style="margin:0.5rem 0">
+      <button onclick="runRepl()" style="margin-right:0.5rem">Run</button>
+      <button class="outline" onclick="resetRepl()">Reset</button>
+    </div>
+    <div id="repl-output" class="repl-output">// output appears here</div>
+  </div>
+  <div class="repl-target style-target" style="margin-top:1rem">This element is your target. Run code above to change it.</div>
+  <h2>Try these</h2>
+  <div style="display:flex;flex-direction:column;gap:0.4rem;font-family:monospace;font-size:0.82rem;">
+    <div style="color:#a5f3fc;cursor:pointer" onclick="setRepl(this)">$('.repl-target').addClass('glowing').text('Glowing!')</div>
+    <div style="color:#a5f3fc;cursor:pointer" onclick="setRepl(this)">$('.repl-target').css({background:'#7f1d1d',color:'#fca5a5',fontSize:'1.4rem'})</div>
+    <div style="color:#a5f3fc;cursor:pointer" onclick="setRepl(this)">$('.repl-target').html('&lt;strong&gt;Bold&lt;/strong&gt; and &lt;em&gt;italic&lt;/em&gt;')</div>
+    <div style="color:#a5f3fc;cursor:pointer" onclick="setRepl(this)">$('.repl-target').attr('data-custom','hello').text('attr set — inspect element')</div>
+  </div>
+</div>
+
+<div id="styles" class="page">
+  <h1>Style Tester</h1>
+  <p>Demonstrates <code>.css()</code> with objects, chaining, and live DOM reads.</p>
+  <div class="style-target" id="style-box">Target element</div>
+  <div class="control-row">
+    <button onclick="$('#style-box').css({background:'#1e3a5f',color:'#93c5fd',fontSize:'1.2rem'})">Blue</button>
+    <button onclick="$('#style-box').css({background:'#14532d',color:'#86efac',fontWeight:'700'})">Green</button>
+    <button onclick="$('#style-box').css({background:'#7f1d1d',color:'#fca5a5',letterSpacing:'0.1em'})">Red</button>
+    <button onclick="$('#style-box').css({background:'#4a1942',color:'#e879f9',fontStyle:'italic'})">Purple</button>
+    <button class="outline" onclick="$('#style-box').attr('style','')">Reset</button>
+  </div>
+  <div style="margin-top:0.75rem;font-size:0.85rem;color:#6b7280" id="computed-display"></div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <span class="modal-close" id="modal-close">✕</span>
+    <h3 id="modal-title"></h3>
+    <p id="modal-body" style="margin-top:0.5rem"></p>
+    <div style="margin-top:1rem;text-align:right">
+      <button id="modal-ok">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: $ (Mini jQuery)
+//  $() wraps DOM elements in an object with chainable methods.
+//  Every method that changes the DOM returns `this` so calls can be chained.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function $(selector, context) {
+  // Accept a CSS string, a raw Element, a NodeList, or an array of Elements.
+  let elements;
+  if (typeof selector === 'string') {
+    elements = Array.from((context || document).querySelectorAll(selector));
+  } else if (selector instanceof Element || selector instanceof Window ||
+             selector instanceof Document) {
+    elements = [selector];
+  } else if (selector instanceof NodeList || Array.isArray(selector)) {
+    elements = Array.from(selector);
+  } else {
+    elements = [];
+  }
+
+  const api = {
+    elements,
+    length: elements.length,
+
+    // ─── Iteration ──────────────────────────────────────────────────────────
+
+    // .each(fn) calls fn(element, index) for every element.
+    // Returns `this` so it can be chained.
+    each(fn) {
+      elements.forEach((el, i) => fn.call(el, el, i));
+      return this;
+    },
+
+    // .get(i) returns the raw DOM element at index i (unwrapped).
+    get(i) {
+      return elements[i];
+    },
+
+    // .map(fn) transforms elements and returns a new wrapped set.
+    map(fn) {
+      return $(elements.map((el, i) => fn.call(el, el, i)).filter(Boolean));
+    },
+
+    // ─── Classes ────────────────────────────────────────────────────────────
+
+    addClass(cls) {
+      elements.forEach(el => el.classList.add(...cls.split(' ')));
+      return this;
+    },
+
+    removeClass(cls) {
+      elements.forEach(el => el.classList.remove(...cls.split(' ')));
+      return this;
+    },
+
+    toggleClass(cls, force) {
+      elements.forEach(el => el.classList.toggle(cls, force));
+      return this;
+    },
+
+    hasClass(cls) {
+      return elements.some(el => el.classList.contains(cls));
+    },
+
+    // ─── Content ────────────────────────────────────────────────────────────
+
+    // .html() with no argument reads innerHTML of the first element.
+    // .html(str) sets innerHTML on all elements.
+    html(content) {
+      if (content === undefined) return elements[0] ? elements[0].innerHTML : '';
+      elements.forEach(el => { el.innerHTML = content; });
+      return this;
+    },
+
+    // .text() with no argument reads textContent of the first element.
+    text(content) {
+      if (content === undefined) return elements[0] ? elements[0].textContent : '';
+      elements.forEach(el => { el.textContent = content; });
+      return this;
+    },
+
+    // .val() reads/writes the value of form inputs.
+    val(value) {
+      if (value === undefined) return elements[0] ? elements[0].value : '';
+      elements.forEach(el => { el.value = value; });
+      return this;
+    },
+
+    // ─── Styles ─────────────────────────────────────────────────────────────
+
+    // .css(prop) reads the computed style of the first element.
+    // .css(prop, val) sets the inline style on all elements.
+    // .css({prop: val, ...}) sets multiple styles at once.
+    css(prop, value) {
+      if (typeof prop === 'object') {
+        elements.forEach(el => Object.assign(el.style, prop));
+        return this;
+      }
+      if (value === undefined) {
+        return elements[0] ? getComputedStyle(elements[0])[prop] : '';
+      }
+      elements.forEach(el => { el.style[prop] = value; });
+      return this;
+    },
+
+    // ─── Attributes ─────────────────────────────────────────────────────────
+
+    attr(name, value) {
+      if (value === undefined) return elements[0] ? elements[0].getAttribute(name) : null;
+      elements.forEach(el => el.setAttribute(name, value));
+      return this;
+    },
+
+    removeAttr(name) {
+      elements.forEach(el => el.removeAttribute(name));
+      return this;
+    },
+
+    data(key, value) {
+      if (value === undefined) return elements[0] ? elements[0].dataset[key] : undefined;
+      elements.forEach(el => { el.dataset[key] = value; });
+      return this;
+    },
+
+    // ─── Events ─────────────────────────────────────────────────────────────
+
+    on(event, fn) {
+      elements.forEach(el => el.addEventListener(event, fn));
+      return this;
+    },
+
+    off(event, fn) {
+      elements.forEach(el => el.removeEventListener(event, fn));
+      return this;
+    },
+
+    trigger(event) {
+      elements.forEach(el => el.dispatchEvent(new Event(event, { bubbles: true })));
+      return this;
+    },
+
+    // ─── Traversal ──────────────────────────────────────────────────────────
+
+    find(selector) {
+      const found = [];
+      elements.forEach(el => found.push(...el.querySelectorAll(selector)));
+      return $(found);
+    },
+
+    closest(selector) {
+      return $(elements.map(el => el.closest(selector)).filter(Boolean));
+    },
+
+    parent() {
+      return $(elements.map(el => el.parentElement).filter(Boolean));
+    },
+
+    children(selector) {
+      const kids = [];
+      elements.forEach(el => kids.push(...el.children));
+      return selector ? $(kids).filter(selector) : $(kids);
+    },
+
+    siblings() {
+      const sibs = [];
+      elements.forEach(el => {
+        if (el.parentElement) {
+          Array.from(el.parentElement.children).forEach(s => {
+            if (s !== el) sibs.push(s);
+          });
+        }
+      });
+      return $(sibs);
+    },
+
+    // .filter(selector) keeps only elements matching a CSS selector.
+    // .filter(fn) keeps only elements where fn returns true.
+    filter(selector) {
+      if (typeof selector === 'function') return $(elements.filter(selector));
+      return $(elements.filter(el => el.matches(selector)));
+    },
+
+    // ─── Visibility ─────────────────────────────────────────────────────────
+
+    show() {
+      elements.forEach(el => { el.style.display = ''; });
+      return this;
+    },
+
+    hide() {
+      elements.forEach(el => { el.style.display = 'none'; });
+      return this;
+    },
+
+    toggle(state) {
+      if (state !== undefined) return state ? this.show() : this.hide();
+      elements.forEach(el => {
+        el.style.display = el.style.display === 'none' ? '' : 'none';
+      });
+      return this;
+    },
+
+    // ─── DOM manipulation ───────────────────────────────────────────────────
+
+    append(content) {
+      elements.forEach(el => {
+        if (typeof content === 'string') {
+          el.insertAdjacentHTML('beforeend', content);
+        } else if (content.elements) {
+          content.elements.forEach(c => el.appendChild(c));
+        } else {
+          el.appendChild(content);
+        }
+      });
+      return this;
+    },
+
+    prepend(content) {
+      elements.forEach(el => {
+        if (typeof content === 'string') {
+          el.insertAdjacentHTML('afterbegin', content);
+        } else if (content.elements) {
+          content.elements.forEach(c => el.insertBefore(c, el.firstChild));
+        } else {
+          el.insertBefore(content, el.firstChild);
+        }
+      });
+      return this;
+    },
+
+    remove() {
+      elements.forEach(el => el.remove());
+      return this;
+    },
+
+    empty() {
+      elements.forEach(el => { el.innerHTML = ''; });
+      return this;
+    },
+  };
+
+  return api;
+}
+
+// ─── Static helpers ───────────────────────────────────────────────────────────
+
+// $.ready(fn) runs fn after the DOM is ready.
+$.ready = function(fn) {
+  if (document.readyState !== 'loading') fn();
+  else document.addEventListener('DOMContentLoaded', fn);
+};
+
+// $.delegate attaches a single listener on `parent` that fires `fn` only
+// when the event target matches `selector`. Efficient for dynamic lists.
+$.delegate = function(parent, event, selector, fn) {
+  $(parent).on(event, function(e) {
+    const target = e.target.closest(selector);
+    if (target && parent.contains(target)) {
+      fn.call(target, e, $(target));
+    }
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PAGE WIRING — every interaction uses $ methods
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+$.delegate(document.querySelector('nav'), 'click', '.nav-link', function(e, $el) {
+  const page = $el.data('page');
+  $('.nav-link').removeClass('active');
+  $el.addClass('active');
+  $('.page').removeClass('active');
+  $('#' + page).addClass('active');
+});
+
+// ─── Accordion ────────────────────────────────────────────────────────────────
+$.delegate(document.body, 'click', '.accordion-header', function(e, $header) {
+  const $item = $header.closest('.accordion-item');
+  $item.toggleClass('open');
+});
+
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+$.delegate(document.body, 'click', '.tab-btn', function(e, $btn) {
+  const tab = $btn.data('tab');
+  // In the same tab-bar, remove active from siblings; add to clicked
+  $btn.closest('.tab-bar').find('.tab-btn').removeClass('active');
+  $btn.addClass('active');
+  // Find the corresponding panels (next siblings of the tab-bar's parent)
+  $('.tab-panel').removeClass('active');
+  $('#tab-' + tab).addClass('active');
+});
+
+// ─── Card filter ──────────────────────────────────────────────────────────────
+$.delegate(document.body, 'click', '[data-filter]', function(e, $btn) {
+  const role = $btn.data('filter');
+  $('#team-cards .card').each(function(el) {
+    const match = !role || el.dataset.role === role;
+    $(el).toggle(match);
+  });
+});
+
+// ─── Modal ───────────────────────────────────────────────────────────────────
+function openModal(title, body) {
+  $('#modal-title').text(title);
+  $('#modal-body').text(body);
+  $('#modal').addClass('open');
+}
+function closeModal() { $('#modal').removeClass('open'); }
+
+$.delegate(document.body, 'click', '.open-modal', function(e, $btn) {
+  openModal($btn.data('title'), $btn.data('body'));
+});
+$('#modal-close').on('click', closeModal);
+$('#modal-ok').on('click', closeModal);
+$('#modal').on('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ─── Settings live preview ───────────────────────────────────────────────────
+$('#team-name').on('input', function() {
+  $('#team-preview').text($(this).val() || 'Unnamed team');
+});
+$('#save-settings').on('click', function() {
+  $('#save-msg').show();
+  setTimeout(() => $('#save-msg').hide(), 2000);
+});
+
+// ─── REPL ─────────────────────────────────────────────────────────────────────
+function runRepl() {
+  const code = $('#repl-input').val();
+  const out = document.getElementById('repl-output');
+  try {
+    const result = Function('"use strict"; const $ = arguments[0]; return (' + code + ')')($);
+    if (result && result.elements) {
+      out.textContent = '// $ object — ' + result.length + ' element(s) matched';
+    } else {
+      out.textContent = JSON.stringify(result, null, 2);
+    }
+    out.className = 'repl-output';
+  } catch (err) {
+    out.textContent = '// Error: ' + err.message;
+    out.className = 'repl-output err';
+  }
+}
+function resetRepl() {
+  $('.repl-target').attr('style', '').text('This element is your target. Run code above to change it.');
+  document.getElementById('repl-output').textContent = '// output appears here';
+  document.getElementById('repl-output').className = 'repl-output';
+}
+function setRepl(el) {
+  $('#repl-input').val(el.textContent);
+  runRepl();
+}
+document.getElementById('repl-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runRepl();
+});
+
+// ─── Style tester computed display ────────────────────────────────────────────
+document.getElementById('style-box').addEventListener('click', function() {
+  const bg = $('#style-box').css('background');
+  const color = $('#style-box').css('color');
+  $('#computed-display').text('background: ' + bg + ' | color: ' + color);
+});
+</script>
+</body>
+</html>
