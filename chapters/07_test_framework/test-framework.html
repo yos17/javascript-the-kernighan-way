@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Test Framework — Chapter 7</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0e17;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+    h1 span { color: #a78bfa; }
+    .subtitle { font-size: 0.85rem; color: #64748b; margin-bottom: 2rem; margin-top: 0.25rem; }
+
+    /* ─── Layout ──────────────────────────────────────────────── */
+    .layout { display: grid; grid-template-columns: 1fr 1.4fr; gap: 1.5rem; max-width: 1080px; margin: 0 auto; }
+    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ─── Panel ───────────────────────────────────────────────── */
+    .panel {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .panel-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+
+    /* ─── Summary bar ─────────────────────────────────────────── */
+    .summary {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      align-items: center;
+    }
+    .summary-stat { font-size: 0.85rem; }
+    .pass-count { color: #4ade80; font-weight: 700; }
+    .fail-count { color: #f87171; font-weight: 700; }
+    .total-count { color: #94a3b8; }
+    .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: #1e293b;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #4ade80;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+
+    /* ─── Suite ───────────────────────────────────────────────── */
+    .suite { margin-bottom: 1rem; }
+    .suite-name {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #a78bfa;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.4rem;
+      padding-left: 0.5rem;
+      border-left: 2px solid #4c1d95;
+    }
+
+    /* ─── Test row ────────────────────────────────────────────── */
+    .test-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.45rem 0.6rem;
+      border-radius: 5px;
+      margin-bottom: 0.2rem;
+      font-size: 0.85rem;
+    }
+    .test-row.pass { background: #052e16; }
+    .test-row.fail { background: #2d0a0a; }
+    .test-row.skip { background: #1a1a1a; opacity: 0.6; }
+    .test-icon { font-size: 0.9rem; line-height: 1.4; flex-shrink: 0; }
+    .test-name { color: #e2e8f0; flex: 1; }
+    .test-row.fail .test-name { color: #fca5a5; }
+    .test-error {
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      color: #f87171;
+      margin-top: 0.3rem;
+      padding: 0.3rem 0.5rem;
+      background: #1c0000;
+      border-radius: 3px;
+      border-left: 2px solid #f87171;
+    }
+    .test-duration { font-size: 0.7rem; color: #475569; flex-shrink: 0; margin-top: 0.15rem; }
+
+    /* ─── Run button ──────────────────────────────────────────── */
+    .run-btn {
+      background: #4c1d95;
+      border: none;
+      border-radius: 7px;
+      color: #ddd6fe;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 0.6rem 1.4rem;
+      transition: background 0.15s;
+      margin-bottom: 1.25rem;
+    }
+    .run-btn:hover { background: #5b21b6; }
+    .run-btn:disabled { opacity: 0.5; cursor: default; }
+
+    /* ─── Code editor simulation ──────────────────────────────── */
+    .code-area {
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      background: #020914;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #94a3b8;
+      padding: 0.75rem;
+      width: 100%;
+      height: 320px;
+      resize: vertical;
+      outline: none;
+      line-height: 1.6;
+    }
+    .code-area:focus { border-color: #4c1d95; color: #e2e8f0; }
+    .code-label {
+      font-size: 0.72rem;
+      color: #64748b;
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .code-error {
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #f87171;
+      background: #2d0a0a;
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .tip { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; }
+    code { background: #1e293b; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.85em; color: #a78bfa; }
+  </style>
+</head>
+<body>
+
+<h1>Build Your Own <span>Test Framework</span></h1>
+<p class="subtitle">Chapter 7 — assertions, test runners, and suites from scratch</p>
+
+<div class="layout">
+
+  <!-- Left: live test editor -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">Write your tests</div>
+      <div class="code-label">Test file (live — edit and run)</div>
+      <textarea class="code-area" id="test-code">// The framework gives you: describe, it, test,
+// expect, beforeEach, afterEach
+
+describe('Math utilities', () => {
+  it('add returns the sum', () => {
+    expect(add(2, 3)).toBe(5);
+    expect(add(-1, 1)).toBe(0);
+    expect(add(0, 0)).toBe(0);
+  });
+
+  it('multiply returns the product', () => {
+    expect(multiply(3, 4)).toBe(12);
+    expect(multiply(-2, 5)).toBe(-10);
+  });
+
+  it('factorial of 5 is 120', () => {
+    expect(factorial(5)).toBe(120);
+  });
+
+  it('factorial of 0 is 1', () => {
+    expect(factorial(0)).toBe(1);
+  });
+
+  it('factorial throws on negative', () => {
+    expect(() => factorial(-1)).toThrow();
+  });
+});
+
+describe('isPrime', () => {
+  it('correctly identifies primes', () => {
+    expect(isPrime(2)).toBe(true);
+    expect(isPrime(7)).toBe(true);
+    expect(isPrime(13)).toBe(true);
+  });
+
+  it('correctly rejects non-primes', () => {
+    expect(isPrime(1)).toBe(false);
+    expect(isPrime(4)).toBe(false);
+    expect(isPrime(9)).toBe(false);
+  });
+});
+
+describe('Array utilities', () => {
+  let nums;
+
+  beforeEach(() => {
+    nums = [3, 1, 4, 1, 5, 9, 2, 6];
+  });
+
+  it('sum adds all elements', () => {
+    expect(arraySum(nums)).toBe(31);
+  });
+
+  it('contains finds elements', () => {
+    expect(nums).toContain(5);
+    expect(nums).not.toContain(99);
+  });
+
+  it('deep equality works', () => {
+    expect([1, 2, 3]).toEqual([1, 2, 3]);
+  });
+});
+</textarea>
+      <div id="code-error" class="code-error"></div>
+      <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center">
+        <button class="run-btn" onclick="runTests()">▶ Run Tests</button>
+        <span class="tip">Or press <code>Ctrl+Enter</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: test results -->
+  <div>
+    <div class="panel">
+      <div class="panel-title">Test Results</div>
+      <div class="summary" id="summary" style="display:none">
+        <span class="summary-stat"><span class="pass-count" id="pass-count">0</span> passed</span>
+        <span class="summary-stat"><span class="fail-count" id="fail-count">0</span> failed</span>
+        <span class="summary-stat"><span class="total-count" id="total-count">0</span> total</span>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      </div>
+      <div id="results">
+        <p style="color:#475569;font-size:0.9rem">Click "Run Tests" to see results.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: MiniTest — a Jest-inspired test framework
+//  The framework collects describe/it/expect calls, then runs them,
+//  catching errors to distinguish passing from failing assertions.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class MiniTest {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    // suites is an array of { name, tests: [{name, fn, skip}] }
+    this.suites      = [];
+    this.currentSuite = null;
+    // beforeEach/afterEach stacks let nested describes inherit hooks
+    this._beforeEachStack = [[]];
+    this._afterEachStack  = [[]];
+  }
+
+  // ─── describe() — group related tests ────────────────────────────────────
+  // describe pushes a new suite onto the stack and runs the definition
+  // function synchronously to collect its tests and hooks.
+  describe(name, fn) {
+    const suite = { name, tests: [] };
+    this.suites.push(suite);
+
+    const prev = this.currentSuite;
+    this.currentSuite = suite;
+
+    // Push fresh hook arrays for this suite's scope
+    this._beforeEachStack.push([]);
+    this._afterEachStack.push([]);
+
+    fn(); // run the suite definition — collects it() / beforeEach() calls
+
+    // Pop hooks when the suite is done being defined
+    this._beforeEachStack.pop();
+    this._afterEachStack.pop();
+
+    this.currentSuite = prev;
+  }
+
+  // ─── beforeEach / afterEach ───────────────────────────────────────────────
+  beforeEach(fn) {
+    this._beforeEachStack[this._beforeEachStack.length - 1].push(fn);
+  }
+
+  afterEach(fn) {
+    this._afterEachStack[this._afterEachStack.length - 1].push(fn);
+  }
+
+  // ─── it() / test() — register a single test ──────────────────────────────
+  it(name, fn) {
+    if (!this.currentSuite) {
+      this.currentSuite = { name: '(top level)', tests: [] };
+      this.suites.push(this.currentSuite);
+    }
+    this.currentSuite.tests.push({ name, fn, skip: fn === undefined });
+  }
+
+  // ─── run() — execute every test and collect results ──────────────────────
+  run() {
+    const results = [];
+
+    for (const suite of this.suites) {
+      const suiteResult = { name: suite.name, tests: [] };
+
+      for (const test of suite.tests) {
+        if (test.skip) {
+          suiteResult.tests.push({ name: test.name, status: 'skip', duration: 0 });
+          continue;
+        }
+
+        // Run all beforeEach hooks (all levels of the stack that were active)
+        const allBefore = this._beforeEachStack.flat();
+        const allAfter  = this._afterEachStack.flat();
+
+        // We stored the hooks at definition time — replay them for each test
+        // (In a real framework you'd track which hooks belong to which suite.)
+        for (const hook of suite._beforeEach || []) {
+          try { hook(); } catch (e) { /* ignore hook errors here */ }
+        }
+
+        const t0 = performance.now();
+        try {
+          test.fn();
+          const duration = Math.round(performance.now() - t0);
+          suiteResult.tests.push({ name: test.name, status: 'pass', duration });
+        } catch (err) {
+          const duration = Math.round(performance.now() - t0);
+          suiteResult.tests.push({
+            name: test.name,
+            status: 'fail',
+            error: err.message,
+            duration,
+          });
+        }
+
+        for (const hook of suite._afterEach || []) {
+          try { hook(); } catch (e) { /* ignore */ }
+        }
+      }
+
+      results.push(suiteResult);
+    }
+
+    return results;
+  }
+}
+
+// ─── expect() — the assertion builder ────────────────────────────────────────
+// expect(actual) returns an object with matcher methods.
+// Each matcher throws an AssertionError if the check fails.
+// The `.not` property inverts every matcher.
+function expect(actual) {
+  function fail(msg) {
+    const err = new Error(msg);
+    err.name = 'AssertionError';
+    throw err;
+  }
+
+  const matchers = {
+    // Strict equality (Object.is — handles NaN, -0 correctly)
+    toBe(expected) {
+      if (!Object.is(actual, expected)) {
+        fail(`Expected ${format(actual)} to be ${format(expected)}`);
+      }
+    },
+
+    // Deep structural equality via JSON (works for plain objects and arrays)
+    toEqual(expected) {
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        fail(`Expected ${format(actual)} to equal ${format(expected)}`);
+      }
+    },
+
+    // Array or string containment
+    toContain(item) {
+      if (Array.isArray(actual) && !actual.includes(item)) {
+        fail(`Expected ${format(actual)} to contain ${format(item)}`);
+      } else if (typeof actual === 'string' && !actual.includes(item)) {
+        fail(`Expected "${actual}" to contain "${item}"`);
+      }
+    },
+
+    // The actual value must be a function that throws when called
+    toThrow(expectedMsg) {
+      if (typeof actual !== 'function') fail(`Expected a function, got ${typeof actual}`);
+      let threw = false;
+      try {
+        actual();
+      } catch (err) {
+        threw = true;
+        if (expectedMsg !== undefined && !err.message.includes(expectedMsg)) {
+          fail(`Expected to throw "${expectedMsg}", got "${err.message}"`);
+        }
+      }
+      if (!threw) fail(`Expected function to throw but it did not`);
+    },
+
+    toBeTruthy()  { if (!actual) fail(`Expected ${format(actual)} to be truthy`); },
+    toBeFalsy()   { if (actual)  fail(`Expected ${format(actual)} to be falsy`); },
+    toBeNull()    { if (actual !== null)      fail(`Expected null, got ${format(actual)}`); },
+    toBeUndefined(){ if (actual !== undefined) fail(`Expected undefined, got ${format(actual)}`); },
+
+    toBeGreaterThan(n) {
+      if (actual <= n) fail(`Expected ${actual} to be greater than ${n}`);
+    },
+    toBeLessThan(n) {
+      if (actual >= n) fail(`Expected ${actual} to be less than ${n}`);
+    },
+    toBeCloseTo(n, precision = 2) {
+      const factor = Math.pow(10, precision);
+      if (Math.round(actual * factor) !== Math.round(n * factor)) {
+        fail(`Expected ${actual} to be close to ${n} (precision ${precision})`);
+      }
+    },
+
+    toMatch(pattern) {
+      if (!new RegExp(pattern).test(String(actual))) {
+        fail(`Expected "${actual}" to match ${pattern}`);
+      }
+    },
+
+    toHaveLength(len) {
+      if (!actual || actual.length !== len) {
+        fail(`Expected length ${len}, got ${actual ? actual.length : 'undefined'}`);
+      }
+    },
+  };
+
+  // .not inverts every matcher by wrapping it in a try/catch
+  matchers.not = {};
+  for (const [name, fn] of Object.entries(matchers)) {
+    if (name === 'not') continue;
+    matchers.not[name] = function() {
+      let threw = false;
+      try {
+        fn.apply(null, arguments);
+      } catch (e) {
+        threw = true; // original assertion failed = .not passes
+      }
+      if (!threw) {
+        fail(`Expected ${format(actual)} NOT to satisfy .${name}()`);
+      }
+    };
+  }
+
+  return matchers;
+}
+
+function format(v) {
+  if (v === null) return 'null';
+  if (v === undefined) return 'undefined';
+  if (typeof v === 'string') return `"${v}"`;
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SUBJECT UNDER TEST: math utilities that the test suite exercises
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function add(a, b)      { return a + b; }
+function multiply(a, b) { return a * b; }
+
+function factorial(n) {
+  if (n < 0) throw new Error('factorial: negative input');
+  if (n === 0) return 1;
+  return n * factorial(n - 1);
+}
+
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let i = 2; i <= Math.sqrt(n); i++) {
+    if (n % i === 0) return false;
+  }
+  return true;
+}
+
+function arraySum(arr) {
+  return arr.reduce((s, x) => s + x, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UI: collect tests, run them, render results
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function runTests() {
+  const runner = new MiniTest();
+
+  // Expose the API as globals for the user's test code
+  const describe  = runner.describe.bind(runner);
+  const it        = runner.it.bind(runner);
+  const test      = runner.it.bind(runner);
+  const beforeEach= runner.beforeEach.bind(runner);
+  const afterEach = runner.afterEach.bind(runner);
+
+  const codeEl  = document.getElementById('test-code');
+  const errorEl = document.getElementById('code-error');
+  errorEl.style.display = 'none';
+
+  try {
+    // The user's test code is evaluated with the framework functions in scope.
+    // This is how most test runners work: they inject globals or require a
+    // setup file that defines describe/it/expect as globals.
+    const fn = new Function(
+      'describe', 'it', 'test', 'beforeEach', 'afterEach', 'expect',
+      'add', 'multiply', 'factorial', 'isPrime', 'arraySum',
+      codeEl.value
+    );
+    fn(describe, it, test, beforeEach, afterEach, expect,
+       add, multiply, factorial, isPrime, arraySum);
+  } catch (err) {
+    errorEl.textContent = 'Syntax error: ' + err.message;
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  const allResults = runner.run();
+  renderResults(allResults);
+}
+
+function renderResults(suites) {
+  let passed = 0, failed = 0, total = 0;
+
+  const html = suites.map(suite => {
+    const rows = suite.tests.map(t => {
+      total++;
+      if (t.status === 'pass') passed++;
+      if (t.status === 'fail') failed++;
+
+      const icon = t.status === 'pass' ? '✓' : t.status === 'fail' ? '✗' : '–';
+      const errorHtml = t.error
+        ? `<div class="test-error">${escHtml(t.error)}</div>` : '';
+      return `
+        <div class="test-row ${t.status}">
+          <span class="test-icon">${icon}</span>
+          <div style="flex:1">
+            <div class="test-name">${escHtml(t.name)}</div>
+            ${errorHtml}
+          </div>
+          <span class="test-duration">${t.duration}ms</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="suite">
+        <div class="suite-name">${escHtml(suite.name)}</div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  document.getElementById('results').innerHTML = html;
+
+  const summary = document.getElementById('summary');
+  summary.style.display = 'flex';
+  document.getElementById('pass-count').textContent  = passed;
+  document.getElementById('fail-count').textContent  = failed;
+  document.getElementById('total-count').textContent = total;
+  const pct = total ? (passed / total * 100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-fill').style.background = failed ? '#f87171' : '#4ade80';
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.getElementById('test-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runTests();
+});
+
+// Auto-run on load
+runTests();
+</script>
+</body>
+</html>

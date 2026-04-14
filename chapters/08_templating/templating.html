@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Templating Engine — Chapter 8</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0c0f1a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+    h1 span { color: #fb923c; }
+    .subtitle { font-size: 0.85rem; color: #64748b; margin-top: 0.25rem; margin-bottom: 2rem; }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .panel-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Template editor */
+    textarea {
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      background: #020914;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #94a3b8;
+      padding: 0.7rem;
+      width: 100%;
+      resize: vertical;
+      outline: none;
+      line-height: 1.6;
+    }
+    textarea:focus { border-color: #fb923c; color: #e2e8f0; }
+
+    /* Data editor */
+    .data-area { height: 130px; }
+    .template-area { height: 200px; }
+
+    /* Output */
+    .output-frame {
+      background: #fff;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      min-height: 160px;
+      padding: 1rem;
+      color: #111;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .output-raw {
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      background: #020914;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #86efac;
+      padding: 0.7rem;
+      min-height: 80px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 0.75rem;
+    }
+    .output-error {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #f87171;
+      background: #2d0a0a;
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+      margin-top: 0.5rem;
+    }
+
+    button {
+      background: #c2410c;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.45rem 1rem;
+      transition: background 0.15s;
+      margin-top: 0.5rem;
+    }
+    button:hover { background: #ea580c; }
+    button.secondary {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      color: #94a3b8;
+      margin-left: 0.4rem;
+    }
+    button.secondary:hover { background: #1e293b; }
+
+    /* Example selector */
+    .examples { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+    .ex-btn {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.65rem;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #1e293b;
+      background: #0f172a;
+      color: #94a3b8;
+      transition: all 0.15s;
+    }
+    .ex-btn:hover, .ex-btn.active { background: #c2410c; border-color: #c2410c; color: #fff; }
+
+    /* Token list */
+    .token-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
+    .token {
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+      font-size: 0.8rem;
+    }
+    .token-type {
+      font-family: monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      flex-shrink: 0;
+      min-width: 70px;
+      text-align: center;
+    }
+    .t-text    { background: #1e293b; color: #94a3b8; }
+    .t-expr    { background: #1a3a1a; color: #4ade80; }
+    .t-if      { background: #1e1b4b; color: #a5b4fc; }
+    .t-each    { background: #3b1010; color: #fca5a5; }
+    .t-raw     { background: #3b2800; color: #fcd34d; }
+    .t-end     { background: #1e293b; color: #64748b; }
+    .token-val { color: #94a3b8; font-family: monospace; word-break: break-all; }
+
+    code { background: #1e293b; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.85em; color: #fb923c; }
+    .helper-tag { font-size:0.75rem; color:#64748b; }
+  </style>
+</head>
+<body>
+
+<h1>Build Your Own <span>Templating Engine</span></h1>
+<p class="subtitle">Chapter 8 — compile template strings into render functions</p>
+
+<div style="max-width:1100px;margin:0 auto">
+
+  <!-- Examples row -->
+  <div class="examples" id="examples">
+    <span style="font-size:0.8rem;color:#64748b;align-self:center">Examples:</span>
+    <button class="ex-btn active" data-ex="profile">Profile card</button>
+    <button class="ex-btn" data-ex="invoice">Invoice</button>
+    <button class="ex-btn" data-ex="blog">Blog post</button>
+    <button class="ex-btn" data-ex="email">Email</button>
+  </div>
+
+  <div class="layout">
+
+    <!-- Left: template + data -->
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div class="panel">
+        <div class="panel-title">Template  <span class="helper-tag">— use {{ }}, {{#if}}, {{#each item in list}}</span></div>
+        <textarea class="template-area" id="template-input"></textarea>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Data (JSON)</div>
+        <textarea class="data-area" id="data-input"></textarea>
+        <div id="data-error" class="output-error" style="display:none"></div>
+        <div>
+          <button onclick="renderTemplate()">Render</button>
+          <button class="secondary" onclick="showTokens()">Show tokens</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: output -->
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div class="panel">
+        <div class="panel-title">Rendered output</div>
+        <div class="output-frame" id="rendered"></div>
+        <div class="output-raw" id="raw-output"></div>
+        <div id="render-error" class="output-error" style="display:none"></div>
+      </div>
+      <div class="panel" id="tokens-panel" style="display:none">
+        <div class="panel-title">Token stream</div>
+        <div class="token-list" id="token-list"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: MiniTemplate
+//  Compiles a template string into a reusable render function.
+//  Syntax:
+//    {{ expression }}          — HTML-escaped output
+//    {{{ expression }}}        — raw (unescaped) HTML output
+//    {{#if condition }}...{{/if}}           — conditional
+//    {{#each item in list }}...{{/each}}    — iteration
+//    {{#unless condition }}...{{/unless}}   — inverse conditional
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Step 1: Tokenize ─────────────────────────────────────────────────────────
+// Break the template string into a flat array of tokens.
+// Each token is { type, value } where type is one of:
+//   'text'    — literal HTML text (outside {{ }})
+//   'expr'    — {{ expression }} — escaped output
+//   'raw'     — {{{ expression }}} — raw output
+//   'if'      — {{#if condition }}
+//   'unless'  — {{#unless condition }}
+//   'each'    — {{#each item in list }}
+//   'endif'   — {{/if}}
+//   'endunless'
+//   'endeach' — {{/each}}
+
+function tokenize(template) {
+  const tokens = [];
+  // Match {{ ... }} or {{{ ... }}}
+  // The triple-brace check must come FIRST so {{{ is not consumed as {{ {
+  const re = /\{\{\{([\s\S]*?)\}\}\}|\{\{([\s\S]*?)\}\}/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = re.exec(template)) !== null) {
+    // Collect any literal text before this tag
+    if (match.index > lastIndex) {
+      tokens.push({ type: 'text', value: template.slice(lastIndex, match.index) });
+    }
+
+    if (match[1] !== undefined) {
+      // Triple braces: raw HTML
+      tokens.push({ type: 'raw', value: match[1].trim() });
+    } else {
+      // Double braces: parse the inner expression
+      const inner = match[2].trim();
+
+      if (inner.startsWith('#if ')) {
+        tokens.push({ type: 'if', value: inner.slice(4).trim() });
+      } else if (inner.startsWith('#unless ')) {
+        tokens.push({ type: 'unless', value: inner.slice(8).trim() });
+      } else if (inner.startsWith('#each ')) {
+        // Syntax: #each item in list
+        const parts = inner.slice(6).trim().split(/\s+in\s+/);
+        tokens.push({ type: 'each', item: parts[0].trim(), list: parts[1].trim() });
+      } else if (inner === '/if') {
+        tokens.push({ type: 'endif' });
+      } else if (inner === '/unless') {
+        tokens.push({ type: 'endunless' });
+      } else if (inner === '/each') {
+        tokens.push({ type: 'endeach' });
+      } else {
+        tokens.push({ type: 'expr', value: inner });
+      }
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Any trailing literal text after the last tag
+  if (lastIndex < template.length) {
+    tokens.push({ type: 'text', value: template.slice(lastIndex) });
+  }
+
+  return tokens;
+}
+
+// ─── Step 2: Generate code ────────────────────────────────────────────────────
+// Turn the token array into a JavaScript function body string.
+// The generated code runs inside a `with(data)` block so template
+// expressions can reference data properties directly (e.g. `name`, not `data.name`).
+
+function generate(tokens) {
+  let code = 'let __out = "";\n';
+  let eachDepth = 0;
+
+  for (const token of tokens) {
+    switch (token.type) {
+      case 'text':
+        code += `__out += ${JSON.stringify(token.value)};\n`;
+        break;
+
+      case 'expr':
+        // __esc() HTML-encodes the value to prevent XSS
+        code += `__out += __esc(${token.value});\n`;
+        break;
+
+      case 'raw':
+        // Unescaped: trust the author to provide safe HTML
+        code += `__out += (${token.value});\n`;
+        break;
+
+      case 'if':
+        code += `if (${token.value}) {\n`;
+        break;
+
+      case 'endif':
+        code += '}\n';
+        break;
+
+      case 'unless':
+        code += `if (!(${token.value})) {\n`;
+        break;
+
+      case 'endunless':
+        code += '}\n';
+        break;
+
+      case 'each':
+        eachDepth++;
+        // Each iteration creates: the item variable, $index, $first, $last
+        code += `const __list${eachDepth} = (${token.list}) || [];\n`;
+        code += `for (let __i${eachDepth} = 0; __i${eachDepth} < __list${eachDepth}.length; __i${eachDepth}++) {\n`;
+        code += `  const ${token.item} = __list${eachDepth}[__i${eachDepth}];\n`;
+        code += `  const $index = __i${eachDepth};\n`;
+        code += `  const $first = __i${eachDepth} === 0;\n`;
+        code += `  const $last  = __i${eachDepth} === __list${eachDepth}.length - 1;\n`;
+        break;
+
+      case 'endeach':
+        code += '}\n';
+        eachDepth--;
+        break;
+    }
+  }
+
+  code += 'return __out;';
+  return code;
+}
+
+// ─── Step 3: Compile ──────────────────────────────────────────────────────────
+// compile() takes a template string and returns a render function.
+// The render function takes a data object and returns an HTML string.
+
+function compile(templateStr) {
+  const tokens = tokenize(templateStr);
+  const code   = generate(tokens);
+
+  // new Function() creates a function from a string of code.
+  // The function uses `with(data)` so expressions like `name` resolve
+  // from the data object rather than requiring `data.name`.
+  // __esc is passed in as a parameter to be available inside `with`.
+  return new Function('data', '__esc', `with(data) {\n${code}\n}`);
+}
+
+// ─── HTML escaping ────────────────────────────────────────────────────────────
+// Prevents user-controlled strings from injecting HTML/JS.
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ─── Render helper ────────────────────────────────────────────────────────────
+// render(template, data) is the public API — compile then call.
+function render(templateStr, data) {
+  const fn = compile(templateStr);
+  return fn(data, escapeHtml);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  EXAMPLE TEMPLATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const EXAMPLES = {
+  profile: {
+    template: `<div style="font-family:sans-serif;max-width:320px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+  <div style="background:{{color}};padding:1.5rem;text-align:center">
+    <div style="font-size:3rem">{{avatar}}</div>
+    <h2 style="color:#fff;margin:0.5rem 0 0">{{name}}</h2>
+    <p style="color:rgba(255,255,255,0.8);margin:0">{{role}}</p>
+  </div>
+  <div style="padding:1rem">
+    {{#if bio}}
+      <p style="color:#555;font-size:0.9rem">{{bio}}</p>
+    {{/if}}
+    <div style="margin-top:0.75rem">
+      <strong>Skills:</strong>
+      <ul style="margin:0.5rem 0 0 1rem;padding:0">
+        {{#each skill in skills}}
+          <li style="color:#333;font-size:0.9rem;{{#if $last}}margin-bottom:0{{/if}}">{{skill}}</li>
+        {{/each}}
+      </ul>
+    </div>
+    {{#unless verified}}
+      <p style="color:#e44;font-size:0.8rem;margin-top:0.75rem">⚠ Account not verified</p>
+    {{/unless}}
+  </div>
+</div>`,
+    data: {
+      name: "Ada Lovelace",
+      role: "Mathematician & Engineer",
+      avatar: "👩‍💻",
+      color: "#4f46e5",
+      bio: "Wrote the first computer algorithm for Babbage's Analytical Engine in 1843.",
+      skills: ["Mathematics", "Algorithm Design", "Technical Writing"],
+      verified: true
+    }
+  },
+
+  invoice: {
+    template: `<div style="font-family:sans-serif;max-width:500px;border:1px solid #ddd;border-radius:6px;padding:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:1.5rem">
+    <div>
+      <h2 style="margin:0;color:#111">INVOICE</h2>
+      <p style="color:#888;margin:0.2rem 0 0;font-size:0.85rem">#{{invoice.number}}</p>
+    </div>
+    <div style="text-align:right;font-size:0.85rem;color:#555">
+      <div>Date: {{invoice.date}}</div>
+      <div>Due: {{invoice.due}}</div>
+    </div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+    <thead>
+      <tr style="border-bottom:2px solid #eee">
+        <th style="text-align:left;padding:0.4rem 0;color:#555">Item</th>
+        <th style="text-align:right;padding:0.4rem 0;color:#555">Qty</th>
+        <th style="text-align:right;padding:0.4rem 0;color:#555">Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each line in invoice.lines}}
+      <tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:0.4rem 0">{{line.name}}</td>
+        <td style="text-align:right;padding:0.4rem 0">{{line.qty}}</td>
+        <td style="text-align:right;padding:0.4rem 0">${{line.price}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" style="text-align:right;padding:0.6rem 0;font-weight:700">Total</td>
+        <td style="text-align:right;padding:0.6rem 0;font-weight:700;color:#4f46e5">${{invoice.total}}</td>
+      </tr>
+    </tfoot>
+  </table>
+  {{#if invoice.notes}}
+    <p style="font-size:0.8rem;color:#888;margin-top:1rem;border-top:1px solid #eee;padding-top:0.75rem">{{invoice.notes}}</p>
+  {{/if}}
+</div>`,
+    data: {
+      invoice: {
+        number: "INV-0042",
+        date: "2025-01-15",
+        due: "2025-02-15",
+        lines: [
+          { name: "Consulting (10h)", qty: 10, price: "150.00" },
+          { name: "Code Review",      qty: 1,  price: "200.00" },
+          { name: "Documentation",    qty: 1,  price: "80.00"  }
+        ],
+        total: "1,580.00",
+        notes: "Payment due within 30 days. Late payments subject to 1.5% monthly interest."
+      }
+    }
+  },
+
+  blog: {
+    template: `<article style="font-family:Georgia,serif;max-width:520px;color:#222">
+  <p style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0">
+    {{category}} · {{date}}
+  </p>
+  <h1 style="font-size:1.6rem;margin:0.4rem 0 0.75rem;line-height:1.3">{{title}}</h1>
+  <p style="color:#555;font-size:0.95rem;line-height:1.7;margin-bottom:1rem">{{summary}}</p>
+  <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem">
+    {{#each tag in tags}}
+      <span style="background:#f1f5f9;color:#475569;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:3px;font-family:sans-serif">{{tag}}</span>
+    {{/each}}
+  </div>
+  {{#if featured}}
+    <div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:0.5rem 0.75rem;font-size:0.85rem;color:#92400e;margin-bottom:1rem;font-family:sans-serif">
+      ★ Featured post
+    </div>
+  {{/if}}
+  <div style="display:flex;align-items:center;gap:0.5rem;font-family:sans-serif;font-size:0.85rem;color:#555;border-top:1px solid #eee;padding-top:0.75rem">
+    <span>By {{author}}</span>
+    <span>·</span>
+    <span>{{readTime}} min read</span>
+    <span>·</span>
+    <span>{{views}} views</span>
+  </div>
+</article>`,
+    data: {
+      title: "Why Every Developer Should Build a Compiler",
+      category: "Engineering",
+      date: "Jan 15, 2025",
+      summary: "You don't need to ship a compiler to benefit from building one. The process teaches you regex, recursion, tree traversal, and code generation — skills that transfer to every domain.",
+      author: "Grace Hopper",
+      readTime: 8,
+      views: "12.4k",
+      tags: ["compilers", "learning", "javascript", "theory"],
+      featured: true
+    }
+  },
+
+  email: {
+    template: `<div style="font-family:sans-serif;max-width:480px;background:#f8fafc;padding:2rem;border-radius:8px">
+  <h2 style="color:#1e293b;margin:0 0 0.5rem">Hi {{user.firstName}},</h2>
+  {{#if user.isPro}}
+    <p style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:4px;padding:0.5rem 0.75rem;font-size:0.85rem;color:#065f46">
+      ✓ You're on the Pro plan. Enjoy unlimited access.
+    </p>
+  {{/if}}
+  {{#unless user.isPro}}
+    <p style="background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:0.5rem 0.75rem;font-size:0.85rem;color:#92400e">
+      Upgrade to Pro to unlock all features.
+    </p>
+  {{/unless}}
+  <p style="color:#475569;line-height:1.6">Here's a summary of your activity this week:</p>
+  <table style="width:100%;border-collapse:collapse;font-size:0.88rem;margin:0.75rem 0">
+    {{#each stat in user.stats}}
+    <tr style="border-bottom:1px solid #e2e8f0">
+      <td style="padding:0.4rem 0;color:#64748b">{{stat.label}}</td>
+      <td style="text-align:right;padding:0.4rem 0;font-weight:600;color:#1e293b">{{stat.value}}</td>
+    </tr>
+    {{/each}}
+  </table>
+  <p style="color:#64748b;font-size:0.82rem;margin-top:1rem">
+    — The {{appName}} Team
+  </p>
+</div>`,
+    data: {
+      appName: "DevMetrics",
+      user: {
+        firstName: "Margaret",
+        isPro: false,
+        stats: [
+          { label: "Commits this week", value: 23 },
+          { label: "PRs reviewed",       value: 7  },
+          { label: "Issues closed",       value: 12 },
+          { label: "Lines written",       value: "1,847" }
+        ]
+      }
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UI WIRING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function loadExample(name) {
+  const ex = EXAMPLES[name];
+  document.getElementById('template-input').value = ex.template;
+  document.getElementById('data-input').value     = JSON.stringify(ex.data, null, 2);
+  document.querySelectorAll('.ex-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.ex === name);
+  });
+  renderTemplate();
+}
+
+function renderTemplate() {
+  const templateStr = document.getElementById('template-input').value;
+  const dataStr     = document.getElementById('data-input').value;
+  const renderEl    = document.getElementById('rendered');
+  const rawEl       = document.getElementById('raw-output');
+  const renderErr   = document.getElementById('render-error');
+  const dataErr     = document.getElementById('data-error');
+
+  renderErr.style.display = 'none';
+  dataErr.style.display   = 'none';
+  document.getElementById('tokens-panel').style.display = 'none';
+
+  let data;
+  try {
+    data = JSON.parse(dataStr);
+  } catch (e) {
+    dataErr.textContent  = 'JSON error: ' + e.message;
+    dataErr.style.display = 'block';
+    return;
+  }
+
+  try {
+    const html = render(templateStr, data);
+    renderEl.innerHTML  = html;
+    rawEl.textContent   = html;
+  } catch (e) {
+    renderErr.textContent  = 'Template error: ' + e.message;
+    renderErr.style.display = 'block';
+    renderEl.innerHTML  = '';
+    rawEl.textContent   = '';
+  }
+}
+
+function showTokens() {
+  const templateStr  = document.getElementById('template-input').value;
+  const tokensPanel  = document.getElementById('tokens-panel');
+  const tokenListEl  = document.getElementById('token-list');
+
+  let tokens;
+  try {
+    tokens = tokenize(templateStr);
+  } catch (e) {
+    return;
+  }
+
+  const typeClass = {
+    text: 't-text', expr: 't-expr', raw: 't-raw',
+    if: 't-if', unless: 't-if', endif: 't-end', endunless: 't-end',
+    each: 't-each', endeach: 't-end',
+  };
+
+  tokenListEl.innerHTML = tokens.map(t => {
+    const val = t.value || (t.item ? `${t.item} in ${t.list}` : '') || '';
+    const preview = val.length > 60 ? val.slice(0, 57) + '…' : val;
+    return `<div class="token">
+      <span class="token-type ${typeClass[t.type] || ''}">${t.type}</span>
+      <span class="token-val">${escapeHtml(preview)}</span>
+    </div>`;
+  }).join('');
+
+  tokensPanel.style.display = 'block';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Wire up example buttons
+document.querySelectorAll('.ex-btn').forEach(btn => {
+  btn.addEventListener('click', () => loadExample(btn.dataset.ex));
+});
+
+document.getElementById('template-input').addEventListener('input', renderTemplate);
+
+// Load first example on startup
+loadExample('profile');
+</script>
+</body>
+</html>
