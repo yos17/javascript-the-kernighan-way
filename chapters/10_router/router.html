@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Router — Chapter 10</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0f1a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── App shell ────────────────────────────────── */
+    nav {
+      background: #111827;
+      border-bottom: 1px solid #1f2937;
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+    }
+    .nav-brand {
+      font-weight: 700;
+      color: #f1f5f9;
+      padding: 0.85rem 0.75rem 0.85rem 0;
+      margin-right: 0.5rem;
+    }
+    .nav-brand span { color: #f472b6; }
+    .nav-link {
+      padding: 0.85rem 0.65rem;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 0.88rem;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      text-decoration: none;
+      user-select: none;
+    }
+    .nav-link:hover { color: #f1f5f9; }
+    .nav-link.active { color: #f472b6; border-bottom-color: #f472b6; }
+
+    .app-content { flex: 1; padding: 2rem 1.5rem; max-width: 820px; margin: 0 auto; width: 100%; }
+
+    /* ─── Pages ─────────────────────────────────────── */
+    h1 { font-size: 1.6rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.4rem; }
+    h2 { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; margin: 1.25rem 0 0.6rem; }
+    p  { color: #94a3b8; line-height: 1.65; margin-bottom: 0.6rem; }
+
+    /* ─── User cards ─────────────────────────────────── */
+    .user-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 1rem; margin-top: 1rem; }
+    .user-card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .user-card:hover { border-color: #f472b6; transform: translateY(-2px); }
+    .user-avatar { font-size: 2.2rem; margin-bottom: 0.4rem; }
+    .user-name { font-weight: 600; color: #f1f5f9; font-size: 0.95rem; }
+    .user-role { font-size: 0.78rem; color: #6b7280; margin-top: 0.15rem; }
+
+    /* ─── User detail ────────────────────────────────── */
+    .detail-header { display: flex; align-items: center; gap: 1.25rem; margin-bottom: 1.5rem; }
+    .detail-avatar { font-size: 3.5rem; }
+    .detail-badge {
+      display: inline-block;
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      padding: 0.15rem 0.5rem; border-radius: 3px;
+      background: #4c1d95; color: #ddd6fe; margin-top: 0.3rem;
+    }
+    .back-link {
+      color: #6b7280; font-size: 0.85rem; cursor: pointer;
+      margin-bottom: 1rem; display: inline-block;
+    }
+    .back-link:hover { color: #f472b6; }
+
+    .stat-row { display: flex; gap: 1.5rem; margin: 1rem 0; }
+    .stat { }
+    .stat-val { font-size: 1.4rem; font-weight: 700; color: #f472b6; }
+    .stat-lbl { font-size: 0.75rem; color: #4b5563; }
+
+    /* ─── About / Blog ───────────────────────────────── */
+    .feature-list { list-style: none; margin: 0.5rem 0; }
+    .feature-list li { padding: 0.4rem 0; color: #94a3b8; font-size: 0.9rem; }
+    .feature-list li::before { content: '→ '; color: #f472b6; }
+
+    .post-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem; }
+    .post-card { background: #111827; border: 1px solid #1f2937; border-radius: 6px; padding: 0.85rem 1rem; }
+    .post-title { font-weight: 600; color: #f1f5f9; font-size: 0.95rem; }
+    .post-meta { font-size: 0.78rem; color: #4b5563; margin-top: 0.2rem; }
+
+    /* ─── 404 ────────────────────────────────────────── */
+    .not-found { text-align: center; padding: 3rem 0; }
+    .not-found .code { font-size: 4rem; font-weight: 900; color: #1f2937; }
+    .not-found p { margin-top: 0.5rem; }
+
+    /* ─── Router debug panel ─────────────────────────── */
+    .debug-bar {
+      background: #111827;
+      border-top: 1px solid #1f2937;
+      padding: 0.5rem 1.5rem;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #4b5563;
+      display: flex;
+      gap: 2rem;
+    }
+    .debug-val { color: #f472b6; }
+
+    /* ─── Query demo ─────────────────────────────────── */
+    .search-box {
+      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;
+    }
+    input[type="text"] {
+      background: #111827; border: 1px solid #1f2937;
+      border-radius: 6px; color: #e2e8f0; font-size: 0.9rem;
+      padding: 0.45rem 0.75rem; outline: none; flex: 1; max-width: 260px;
+    }
+    input[type="text"]:focus { border-color: #f472b6; }
+    button {
+      background: #831843; border: none; border-radius: 6px;
+      color: #fbcfe8; cursor: pointer; font-size: 0.82rem;
+      font-weight: 600; padding: 0.45rem 0.85rem;
+      transition: background 0.15s;
+    }
+    button:hover { background: #9d174d; }
+    .tag { display: inline-block; background: #1f2937; color: #9ca3af; font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px; margin: 0.15rem; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Nav (links are handled by router, not browser) ──────────────────── -->
+<nav>
+  <div class="nav-brand">Mini<span>Router</span></div>
+  <a class="nav-link" href="#" data-route="/">Home</a>
+  <a class="nav-link" href="#" data-route="/users">Users</a>
+  <a class="nav-link" href="#" data-route="/blog">Blog</a>
+  <a class="nav-link" href="#" data-route="/about">About</a>
+</nav>
+
+<!-- ─── Page outlet ─────────────────────────────────────────────────────── -->
+<div class="app-content" id="app"></div>
+
+<!-- ─── Debug bar ────────────────────────────────────────────────────────── -->
+<div class="debug-bar">
+  <span>path: <span class="debug-val" id="dbg-path">/</span></span>
+  <span>params: <span class="debug-val" id="dbg-params">{}</span></span>
+  <span>query: <span class="debug-val" id="dbg-query">{}</span></span>
+  <span>matched: <span class="debug-val" id="dbg-route">—</span></span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: Router
+//  A client-side router using the History API.
+//  Routes are registered with .get(path, handler). Path segments starting
+//  with : are URL parameters — /users/:id matches /users/42 with params.id = '42'.
+//  Navigation is triggered by router.navigate(path) which calls pushState
+//  and dispatches to the matching handler.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class Router {
+  constructor(outlet) {
+    this.routes      = [];   // registered routes: [{ pattern, handler, original }]
+    this._notFound   = null; // 404 handler
+    this._outlet     = outlet; // the DOM element where pages are rendered
+    this._onNavigate = null; // hook called after each navigation
+
+    // Listen for browser Back/Forward button presses
+    window.addEventListener('popstate', () => {
+      this._dispatch(location.pathname + location.search);
+    });
+  }
+
+  // ─── Route registration ───────────────────────────────────────────────────
+
+  // .get(path, handler) — register a route.
+  // path can contain :param segments. handler receives { params, query, path }.
+  get(path, handler) {
+    this.routes.push({
+      pattern:  this._compile(path),
+      handler,
+      original: path,
+    });
+    return this; // enable chaining: router.get('/').get('/about')
+  }
+
+  // .on404(handler) — register the not-found handler.
+  on404(handler) {
+    this._notFound = handler;
+    return this;
+  }
+
+  // .onNavigate(hook) — called after every successful navigation.
+  onNavigate(hook) {
+    this._onNavigate = hook;
+    return this;
+  }
+
+  // ─── Navigation ──────────────────────────────────────────────────────────
+
+  // navigate(path) — programmatic navigation. Updates the URL and dispatches.
+  navigate(path) {
+    history.pushState({}, '', path);
+    this._dispatch(path);
+  }
+
+  back()    { history.back(); }
+  forward() { history.forward(); }
+
+  // ─── URL pattern compiler ─────────────────────────────────────────────────
+  // Converts '/users/:id/posts/:postId' into a RegExp with named capture groups.
+  // '/users/:id' → /^\/users\/(?<id>[^/]+)\/?$/
+  _compile(path) {
+    const pattern = path
+      .replace(/\//g, '\\/')             // escape forward slashes
+      .replace(/:(\w+)/g, '(?<$1>[^\\/]+)') // :param → named capture group
+      .replace(/\*/g, '.*');             // * → match anything
+    return new RegExp(`^${pattern}\\/?$`);
+  }
+
+  // ─── Query string parser ──────────────────────────────────────────────────
+  _parseQuery(search) {
+    const params = {};
+    if (!search) return params;
+    new URLSearchParams(search).forEach((value, key) => {
+      params[key] = value;
+    });
+    return params;
+  }
+
+  // ─── Dispatcher ───────────────────────────────────────────────────────────
+  // Split path from query, find matching route, call its handler.
+  _dispatch(fullPath) {
+    const [pathname, search] = fullPath.split('?');
+    const query  = this._parseQuery(search ? '?' + search : '');
+    const ctx    = { path: pathname, query };
+
+    for (const route of this.routes) {
+      const match = pathname.match(route.pattern);
+      if (match) {
+        ctx.params       = match.groups || {};
+        ctx.matchedRoute = route.original;
+        route.handler(ctx);
+        if (this._onNavigate) this._onNavigate(ctx);
+        return;
+      }
+    }
+
+    // No route matched
+    if (this._notFound) this._notFound({ path: pathname, query, params: {} });
+  }
+
+  // ─── Start ────────────────────────────────────────────────────────────────
+  // start() dispatches the initial route based on the current URL.
+  start() {
+    this._dispatch(location.pathname + location.search);
+    return this;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  APP DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const USERS = [
+  { id: 1, name: 'Ada Lovelace',     role: 'Mathematician',  avatar: '👩‍💻', commits: 847, stars: 3200, bio: 'Wrote the first algorithm intended for a machine. Foresaw general-purpose computing a century before the first computer.' },
+  { id: 2, name: 'Grace Hopper',     role: 'Admiral & Coder', avatar: '⚓', commits: 1203, stars: 5100, bio: 'Invented the first compiler. Popularised the idea that programs could be written in English-like language.' },
+  { id: 3, name: 'Alan Turing',      role: 'Mathematician',  avatar: '🧮', commits: 512,  stars: 9800, bio: 'Defined computation itself. His Turing machine model underpins all modern computer science.' },
+  { id: 4, name: 'Margaret Hamilton',role: 'Engineer',       avatar: '🚀', commits: 2047, stars: 4400, bio: 'Led the team that wrote the Apollo 11 guidance software. Coined the term "software engineering".' },
+  { id: 5, name: 'Linus Torvalds',   role: 'Kernel Hacker',  avatar: '🐧', commits: 31200,stars: 18000,bio: 'Created Linux and Git. More code runs on his software than any other living programmer.' },
+  { id: 6, name: 'Guido van Rossum', role: 'Language Author', avatar: '🐍', commits: 4821, stars: 7200, bio: 'Designed Python with readability as the primary goal. "There should be one obvious way to do it."' },
+];
+
+const POSTS = [
+  { id: 1, title: 'On Analytical Engines',         date: '1843-08-01', author: 'Ada Lovelace',     tags: ['history', 'algorithms'] },
+  { id: 2, title: 'The Birth of the Compiler',     date: '1952-03-17', author: 'Grace Hopper',     tags: ['compilers', 'history'] },
+  { id: 3, title: 'Computing Machinery and Intelligence', date: '1950-10-01', author: 'Alan Turing', tags: ['AI', 'theory'] },
+  { id: 4, title: 'Software Engineering Principles', date: '1969-07-20', author: 'Margaret Hamilton', tags: ['engineering'] },
+  { id: 5, title: 'Why Git Was Designed That Way', date: '2005-04-07', author: 'Linus Torvalds',  tags: ['git', 'vcs'] },
+  { id: 6, title: 'The Zen of Python',             date: '2004-08-19', author: 'Guido van Rossum', tags: ['python', 'design'] },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PAGE RENDERERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderHome() {
+  return `
+    <h1>MiniRouter Demo</h1>
+    <p>A client-side router built with the History API — no library, no framework, 60 lines of JavaScript.</p>
+    <h2>What this router does</h2>
+    <ul class="feature-list">
+      <li>Maps URL paths to handler functions</li>
+      <li>Supports <strong>:param</strong> segments — <code>/users/:id</code> matches <code>/users/42</code></li>
+      <li>Parses <strong>query strings</strong> — <code>/blog?tag=history</code></li>
+      <li>Handles Browser Back &amp; Forward via the popstate event</li>
+      <li>Updates the URL with <code>history.pushState</code> — no page reload</li>
+    </ul>
+    <h2>Try navigating</h2>
+    <p>Use the links above, or click a user card on the Users page. Watch the debug bar at the bottom — it shows the matched route, extracted params, and query string in real time.</p>`;
+}
+
+function renderUsers({ query }) {
+  const search = (query.search || '').toLowerCase();
+  const users  = search
+    ? USERS.filter(u => u.name.toLowerCase().includes(search) || u.role.toLowerCase().includes(search))
+    : USERS;
+
+  return `
+    <h1>Users</h1>
+    <div class="search-box">
+      <input type="text" id="user-search" placeholder="Search users…" value="${escHtml(query.search || '')}">
+      <button onclick="searchUsers()">Search</button>
+    </div>
+    <div class="user-grid">
+      ${users.map(u => `
+        <div class="user-card" onclick="router.navigate('/users/${u.id}')">
+          <div class="user-avatar">${u.avatar}</div>
+          <div class="user-name">${escHtml(u.name)}</div>
+          <div class="user-role">${escHtml(u.role)}</div>
+        </div>`).join('')}
+    </div>
+    ${users.length === 0 ? '<p style="margin-top:1rem;color:#4b5563">No users match your search.</p>' : ''}`;
+}
+
+function renderUserDetail({ params }) {
+  const user = USERS.find(u => u.id === parseInt(params.id));
+  if (!user) return render404({ path: `/users/${params.id}` });
+
+  return `
+    <span class="back-link" onclick="router.navigate('/users')">← Back to users</span>
+    <div class="detail-header">
+      <div class="detail-avatar">${user.avatar}</div>
+      <div>
+        <h1>${escHtml(user.name)}</h1>
+        <div class="detail-badge">${escHtml(user.role)}</div>
+      </div>
+    </div>
+    <p>${escHtml(user.bio)}</p>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">${user.commits.toLocaleString()}</div><div class="stat-lbl">Commits</div></div>
+      <div class="stat"><div class="stat-val">★ ${user.stars.toLocaleString()}</div><div class="stat-lbl">Stars</div></div>
+    </div>`;
+}
+
+function renderBlog({ query }) {
+  const tag     = query.tag || '';
+  const visible = tag ? POSTS.filter(p => p.tags.includes(tag)) : POSTS;
+  const allTags = [...new Set(POSTS.flatMap(p => p.tags))].sort();
+
+  return `
+    <h1>Blog</h1>
+    <div style="margin-bottom:0.75rem">
+      <span style="font-size:0.8rem;color:#4b5563;margin-right:0.4rem">Filter by tag:</span>
+      <span class="tag" style="cursor:pointer;${!tag?'background:#4c1d95;color:#ddd6fe':''}" onclick="router.navigate('/blog')">all</span>
+      ${allTags.map(t => `
+        <span class="tag" style="cursor:pointer;${tag===t?'background:#4c1d95;color:#ddd6fe':''}"
+              onclick="router.navigate('/blog?tag=${t}')">${t}</span>`).join('')}
+    </div>
+    <div class="post-list">
+      ${visible.map(p => `
+        <div class="post-card">
+          <div class="post-title">${escHtml(p.title)}</div>
+          <div class="post-meta">${escHtml(p.author)} · ${p.date}
+            ${p.tags.map(t => `<span class="tag" style="cursor:pointer" onclick="router.navigate('/blog?tag=${t}')">${t}</span>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>
+    ${visible.length === 0 ? '<p style="margin-top:1rem;color:#4b5563">No posts with that tag.</p>' : ''}`;
+}
+
+function renderAbout() {
+  return `
+    <h1>About This Router</h1>
+    <p>60 lines of JavaScript. No dependencies. Handles everything a real single-page app needs.</p>
+    <h2>How it works</h2>
+    <ul class="feature-list">
+      <li><code>history.pushState()</code> updates URL without reloading</li>
+      <li>The <code>popstate</code> event fires on Back/Forward</li>
+      <li><code>RegExp</code> with named capture groups handles <code>:params</code></li>
+      <li><code>URLSearchParams</code> parses query strings</li>
+    </ul>
+    <h2>Usage</h2>
+    <pre style="background:#111827;border-radius:6px;padding:1rem;font-size:0.8rem;color:#94a3b8;overflow-x:auto">
+const router = new Router(document.getElementById('app'));
+
+router
+  .get('/', ctx => render(homePage))
+  .get('/users', ctx => render(userList(ctx.query)))
+  .get('/users/:id', ctx => render(userDetail(ctx.params.id)))
+  .on404(ctx => render(notFoundPage))
+  .start();</pre>`;
+}
+
+function render404({ path }) {
+  return `
+    <div class="not-found">
+      <div class="code">404</div>
+      <h2>Page not found</h2>
+      <p>No route matched <code>${escHtml(path)}</code></p>
+      <p style="margin-top:1rem"><span class="back-link" onclick="router.navigate('/')">← Go home</span></p>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  WIRE UP ROUTER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const app = document.getElementById('app');
+
+const router = new Router(app);
+
+router
+  .get('/',          ctx => { app.innerHTML = renderHome();             })
+  .get('/users',     ctx => { app.innerHTML = renderUsers(ctx);         })
+  .get('/users/:id', ctx => { app.innerHTML = renderUserDetail(ctx);    })
+  .get('/blog',      ctx => { app.innerHTML = renderBlog(ctx);          })
+  .get('/about',     ctx => { app.innerHTML = renderAbout();            })
+  .on404(           ctx => { app.innerHTML = render404(ctx);            })
+  .onNavigate(ctx => {
+    // Update active nav link
+    document.querySelectorAll('.nav-link').forEach(link => {
+      const route = link.dataset.route;
+      link.classList.toggle('active', ctx.path === route ||
+        (route !== '/' && ctx.path.startsWith(route)));
+    });
+    // Update debug bar
+    document.getElementById('dbg-path').textContent   = ctx.path;
+    document.getElementById('dbg-params').textContent = JSON.stringify(ctx.params || {});
+    document.getElementById('dbg-query').textContent  = JSON.stringify(ctx.query  || {});
+    document.getElementById('dbg-route').textContent  = ctx.matchedRoute || '404';
+  })
+  .start();
+
+// ─── Nav link intercept ────────────────────────────────────────────────────────
+// Prevent nav links from triggering a real browser navigation.
+// Instead, pass the path to router.navigate().
+document.querySelector('nav').addEventListener('click', e => {
+  const link = e.target.closest('[data-route]');
+  if (link) {
+    e.preventDefault();
+    router.navigate(link.dataset.route);
+  }
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function searchUsers() {
+  const val = document.getElementById('user-search').value.trim();
+  router.navigate('/users' + (val ? '?search=' + encodeURIComponent(val) : ''));
+}
+
+document.addEventListener('keydown', e => {
+  const inp = document.getElementById('user-search');
+  if (inp && e.key === 'Enter') searchUsers();
+});
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

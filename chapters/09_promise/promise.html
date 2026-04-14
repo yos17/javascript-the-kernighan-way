@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Promise — Chapter 9</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #080d1a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+    h1 span { color: #38bdf8; }
+    .subtitle { font-size: 0.85rem; color: #475569; margin-top: 0.25rem; margin-bottom: 2rem; }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 1080px; margin: 0 auto; }
+    @media (max-width: 680px) { .layout { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #0d1829;
+      border: 1px solid #1e3a5f;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .panel-title {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: #64748b; margin-bottom: 1rem;
+    }
+
+    /* Timeline */
+    .timeline { display: flex; flex-direction: column; gap: 0; position: relative; }
+    .timeline::before {
+      content: ''; position: absolute; left: 16px; top: 0; bottom: 0;
+      width: 2px; background: #1e3a5f;
+    }
+    .event {
+      display: flex; gap: 0.75rem; align-items: flex-start;
+      padding: 0.5rem 0; position: relative; z-index: 1;
+    }
+    .event-dot {
+      width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+      margin-top: 0.2rem; border: 2px solid #0d1829;
+    }
+    .event-dot.pending  { background: #475569; }
+    .event-dot.resolve  { background: #38bdf8; box-shadow: 0 0 6px #38bdf844; }
+    .event-dot.reject   { background: #f87171; box-shadow: 0 0 6px #f8717144; }
+    .event-dot.then     { background: #4ade80; box-shadow: 0 0 6px #4ade8044; }
+    .event-dot.catch_   { background: #fb923c; }
+    .event-dot.finally_ { background: #a78bfa; }
+    .event-dot.all      { background: #f0abfc; }
+    .event-dot.race     { background: #fcd34d; }
+
+    .event-body { flex: 1; }
+    .event-label { font-size: 0.82rem; font-weight: 600; color: #cbd5e1; }
+    .event-detail { font-family: monospace; font-size: 0.76rem; color: #64748b; margin-top: 0.1rem; }
+    .event-time { font-size: 0.7rem; color: #334155; margin-top: 0.1rem; }
+
+    /* Demo controls */
+    button {
+      background: #0c4a6e;
+      border: none; border-radius: 6px; color: #bae6fd;
+      cursor: pointer; font-size: 0.82rem; font-weight: 600;
+      padding: 0.45rem 0.85rem; transition: background 0.15s;
+    }
+    button:hover { background: #075985; }
+    button.danger { background: #7f1d1d; color: #fca5a5; }
+    button.danger:hover { background: #991b1b; }
+    button.purple { background: #4c1d95; color: #ddd6fe; }
+    button.purple:hover { background: #5b21b6; }
+
+    .demo-section { margin-bottom: 1.25rem; }
+    .demo-title {
+      font-size: 0.78rem; font-weight: 700; color: #38bdf8;
+      margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .btn-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+    /* State badge */
+    .state-badge {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 0.15rem 0.5rem; border-radius: 3px; text-transform: uppercase;
+    }
+    .state-pending  { background: #1e293b; color: #94a3b8; }
+    .state-fulfilled{ background: #0c4a6e; color: #7dd3fc; }
+    .state-rejected { background: #7f1d1d; color: #fca5a5; }
+
+    /* Code display */
+    .code-block {
+      font-family: 'Courier New', monospace; font-size: 0.78rem;
+      background: #020914; border: 1px solid #1e293b; border-radius: 6px;
+      color: #94a3b8; padding: 0.75rem; margin-top: 0.5rem;
+      white-space: pre; overflow-x: auto; line-height: 1.5;
+    }
+    .hl-blue   { color: #38bdf8; }
+    .hl-green  { color: #4ade80; }
+    .hl-orange { color: #fb923c; }
+    .hl-purple { color: #a78bfa; }
+
+    .sep { border: none; border-top: 1px solid #1e3a5f; margin: 1rem 0; }
+    code { background: #1e3a5f; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.85em; color: #38bdf8; }
+  </style>
+</head>
+<body>
+
+<h1>Build Your Own <span>Promise</span></h1>
+<p class="subtitle">Chapter 9 — async, the event loop, and microtasks from scratch</p>
+
+<div class="layout">
+
+  <!-- Left: interactive demos -->
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <div class="panel">
+      <div class="panel-title">Promise lifecycle</div>
+
+      <div class="demo-section">
+        <div class="demo-title">Create &amp; resolve</div>
+        <div class="btn-row">
+          <button onclick="demoResolve()">new MyPromise → resolve</button>
+          <button class="danger" onclick="demoReject()">new MyPromise → reject</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="demo-section">
+        <div class="demo-title">.then() chaining</div>
+        <div class="btn-row">
+          <button onclick="demoChain()">3-step chain</button>
+          <button onclick="demoChainError()">chain with error</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="demo-section">
+        <div class="demo-title">.catch() &amp; .finally()</div>
+        <div class="btn-row">
+          <button class="danger" onclick="demoCatch()">reject + .catch()</button>
+          <button class="purple" onclick="demoFinally()">resolve + .finally()</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="demo-section">
+        <div class="demo-title">MyPromise.all() &amp; .race()</div>
+        <div class="btn-row">
+          <button onclick="demoAll()">Promise.all (3 async)</button>
+          <button onclick="demoAllFail()">Promise.all (one fails)</button>
+          <button class="purple" onclick="demoRace()">Promise.race</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="demo-section">
+        <div class="demo-title">Simulated API fetch</div>
+        <div class="btn-row">
+          <button onclick="demoFetch()">fetchUser(1)</button>
+          <button onclick="demoFetchChain()">fetchUser → fetchPosts</button>
+          <button class="danger" onclick="demoFetchFail()">fetchUser(999) → 404</button>
+        </div>
+      </div>
+
+      <div style="margin-top:0.75rem">
+        <button class="danger" style="font-size:0.75rem" onclick="clearLog()">Clear log</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Current promise state</div>
+      <div id="state-display" style="font-size:0.85rem;color:#475569">No promise created yet.</div>
+    </div>
+  </div>
+
+  <!-- Right: event log -->
+  <div>
+    <div class="panel" style="height:100%">
+      <div class="panel-title">Event timeline</div>
+      <div class="timeline" id="timeline">
+        <div class="event">
+          <div class="event-dot pending"></div>
+          <div class="event-body">
+            <div class="event-label">Waiting for first action…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: MyPromise
+//  A Promise/A+ compliant implementation. The key insight: a Promise is a
+//  state machine with three states — pending, fulfilled, rejected — and
+//  handlers attached via .then() are queued as microtasks, not run synchronously.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PENDING   = 'pending';
+const FULFILLED = 'fulfilled';
+const REJECTED  = 'rejected';
+
+class MyPromise {
+  constructor(executor) {
+    this.state    = PENDING;
+    this.value    = undefined;  // resolved value OR rejection reason
+    this.handlers = [];         // .then() handlers waiting to be called
+
+    const resolve = (value) => {
+      if (this.state !== PENDING) return;  // state transitions are one-way
+
+      // If the resolved value is itself a thenable (another promise or
+      // promise-like), adopt ITS state instead of resolving immediately.
+      // This is what makes promise chaining work.
+      if (value && typeof value.then === 'function') {
+        value.then(resolve, reject);
+        return;
+      }
+
+      this.state = FULFILLED;
+      this.value = value;
+      this._runHandlers();
+    };
+
+    const reject = (reason) => {
+      if (this.state !== PENDING) return;
+      this.state = REJECTED;
+      this.value = reason;
+      this._runHandlers();
+    };
+
+    // The executor runs synchronously. If it throws, the promise is rejected.
+    try {
+      executor(resolve, reject);
+    } catch (err) {
+      reject(err);
+    }
+  }
+
+  // ─── .then() ──────────────────────────────────────────────────────────────
+  // .then() always returns a NEW promise. This is what enables chaining:
+  // the value returned from onFulfilled becomes the resolved value of
+  // the new promise, which the next .then() in the chain receives.
+  then(onFulfilled, onRejected) {
+    return new MyPromise((resolve, reject) => {
+      this.handlers.push({
+        onFulfilled: typeof onFulfilled === 'function' ? onFulfilled : null,
+        onRejected:  typeof onRejected  === 'function' ? onRejected  : null,
+        resolve,
+        reject,
+      });
+      this._runHandlers();
+    });
+  }
+
+  catch(onRejected) {
+    return this.then(null, onRejected);
+  }
+
+  // .finally() runs fn regardless of outcome, then re-throws or re-resolves.
+  finally(fn) {
+    return this.then(
+      (value)  => MyPromise.resolve(fn()).then(() => value),
+      (reason) => MyPromise.resolve(fn()).then(() => { throw reason; })
+    );
+  }
+
+  // ─── _runHandlers() — the microtask queue ─────────────────────────────────
+  // Handlers are always called asynchronously — even if the promise is already
+  // settled. queueMicrotask() schedules work to run after the current
+  // synchronous code finishes but before the next macrotask (setTimeout, etc).
+  _runHandlers() {
+    if (this.state === PENDING) return;
+
+    for (const handler of this.handlers) {
+      queueMicrotask(() => {
+        const { onFulfilled, onRejected, resolve, reject } = handler;
+
+        if (this.state === FULFILLED) {
+          if (!onFulfilled) { resolve(this.value); return; }
+          try   { resolve(onFulfilled(this.value)); }
+          catch (err) { reject(err); }
+        } else {
+          if (!onRejected)  { reject(this.value);  return; }
+          try   { resolve(onRejected(this.value)); }
+          catch (err) { reject(err); }
+        }
+      });
+    }
+
+    this.handlers = [];  // clear processed handlers
+  }
+
+  // ─── Static methods ───────────────────────────────────────────────────────
+
+  static resolve(value) {
+    // If value is already a MyPromise, return it unchanged
+    if (value instanceof MyPromise) return value;
+    return new MyPromise(resolve => resolve(value));
+  }
+
+  static reject(reason) {
+    return new MyPromise((_, reject) => reject(reason));
+  }
+
+  // .all() waits for ALL promises. Fails fast if any one rejects.
+  static all(promises) {
+    return new MyPromise((resolve, reject) => {
+      const results  = new Array(promises.length);
+      let remaining  = promises.length;
+
+      if (remaining === 0) { resolve(results); return; }
+
+      promises.forEach((p, i) => {
+        MyPromise.resolve(p).then(
+          value => {
+            results[i] = value;
+            if (--remaining === 0) resolve(results);
+          },
+          reason => reject(reason)  // one failure rejects the whole .all()
+        );
+      });
+    });
+  }
+
+  // .race() settles as soon as the first promise settles (either way).
+  static race(promises) {
+    return new MyPromise((resolve, reject) => {
+      for (const p of promises) {
+        MyPromise.resolve(p).then(resolve, reject);
+      }
+    });
+  }
+
+  // .allSettled() waits for all, never fails — reports each outcome.
+  static allSettled(promises) {
+    return MyPromise.all(
+      promises.map(p =>
+        MyPromise.resolve(p).then(
+          value  => ({ status: 'fulfilled', value }),
+          reason => ({ status: 'rejected', reason })
+        )
+      )
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MOCK API — simulates async network requests using setTimeout
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const USERS = {
+  1: { id: 1, name: 'Ada Lovelace',    role: 'Engineer' },
+  2: { id: 2, name: 'Grace Hopper',    role: 'Admiral'  },
+  3: { id: 3, name: 'Margaret Hamilton',role: 'Director' },
+};
+
+const POSTS = {
+  1: [{ id: 101, title: 'First Algorithm' }, { id: 102, title: 'Notes on the Engine' }],
+  2: [{ id: 201, title: 'Debugging the Bug' }],
+};
+
+function delay(ms) {
+  return new MyPromise(resolve => setTimeout(resolve, ms));
+}
+
+function fetchUser(id) {
+  return delay(400 + Math.random() * 300).then(() => {
+    if (!USERS[id]) throw new Error('404: User not found');
+    return USERS[id];
+  });
+}
+
+function fetchPosts(userId) {
+  return delay(300 + Math.random() * 200).then(() => {
+    return POSTS[userId] || [];
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UI: Timeline logger
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const startTime = Date.now();
+
+function log(type, label, detail = '') {
+  const timeline = document.getElementById('timeline');
+  const elapsed  = ((Date.now() - startTime) / 1000).toFixed(2);
+
+  const dotClass = {
+    resolve: 'resolve', reject: 'reject', then: 'then',
+    catch: 'catch_', finally: 'finally_', all: 'all', race: 'race',
+    info: 'pending',
+  }[type] || 'pending';
+
+  const event = document.createElement('div');
+  event.className = 'event';
+  event.innerHTML = `
+    <div class="event-dot ${dotClass}"></div>
+    <div class="event-body">
+      <div class="event-label">${escHtml(label)}</div>
+      ${detail ? `<div class="event-detail">${escHtml(String(detail))}</div>` : ''}
+      <div class="event-time">+${elapsed}s</div>
+    </div>`;
+  timeline.appendChild(event);
+  timeline.scrollTop = timeline.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('timeline').innerHTML = '';
+  document.getElementById('state-display').textContent = 'Log cleared.';
+}
+
+function setStateDisplay(state, value) {
+  const stateClass = {
+    pending: 'state-pending',
+    fulfilled: 'state-fulfilled',
+    rejected: 'state-rejected',
+  }[state] || 'state-pending';
+
+  const val = value !== undefined
+    ? (typeof value === 'object' ? JSON.stringify(value) : String(value))
+    : '';
+
+  document.getElementById('state-display').innerHTML =
+    `State: <span class="state-badge ${stateClass}">${state}</span>` +
+    (val ? ` <span style="font-family:monospace;font-size:0.8rem;color:#64748b">→ ${escHtml(val.slice(0,60))}</span>` : '');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DEMOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function demoResolve() {
+  log('info', 'new MyPromise(resolve => resolve(42))');
+  setStateDisplay('pending');
+  const p = new MyPromise(resolve => {
+    setTimeout(() => resolve(42), 500);
+  });
+  p.then(v => {
+    log('resolve', 'Resolved!', `value = ${v}`);
+    setStateDisplay('fulfilled', v);
+  });
+}
+
+function demoReject() {
+  log('info', 'new MyPromise((_, reject) => reject("oops"))');
+  setStateDisplay('pending');
+  const p = new MyPromise((_, reject) => {
+    setTimeout(() => reject('Something went wrong'), 500);
+  });
+  p.catch(err => {
+    log('reject', 'Rejected', `reason = "${err}"`);
+    setStateDisplay('rejected', err);
+  });
+}
+
+function demoChain() {
+  log('info', 'Chain: fetch → transform → format');
+  setStateDisplay('pending');
+  MyPromise.resolve(5)
+    .then(n => { log('then', '.then step 1: multiply by 3', `${n} → ${n*3}`); return n * 3; })
+    .then(n => { log('then', '.then step 2: add 1',         `${n} → ${n+1}`); return n + 1; })
+    .then(n => { log('then', '.then step 3: stringify',     `${n} → "${n}"`); setStateDisplay('fulfilled', String(n)); return String(n); });
+}
+
+function demoChainError() {
+  log('info', 'Chain with mid-chain error → caught by .catch');
+  setStateDisplay('pending');
+  MyPromise.resolve(10)
+    .then(n => { log('then', '.then step 1: OK', `${n}`); return n * 2; })
+    .then(() => { throw new Error('Step 2 failed!'); })
+    .then(n => { log('then', '.then step 3: SKIPPED', `${n}`); return n; })
+    .catch(err => {
+      log('catch', '.catch caught the error', err.message);
+      setStateDisplay('rejected', err.message);
+    });
+}
+
+function demoCatch() {
+  log('info', 'reject → .catch recovers → .then continues');
+  setStateDisplay('pending');
+  MyPromise.reject(new Error('network timeout'))
+    .catch(err => {
+      log('catch', '.catch: recovered from error', err.message);
+      return 'default value';
+    })
+    .then(v => {
+      log('then', '.then: chain continues after .catch', v);
+      setStateDisplay('fulfilled', v);
+    });
+}
+
+function demoFinally() {
+  log('info', 'resolve → .finally (always runs) → .then');
+  setStateDisplay('pending');
+  MyPromise.resolve('result data')
+    .finally(() => log('finally', '.finally: runs regardless of outcome'))
+    .then(v => {
+      log('then', '.then: receives original value', v);
+      setStateDisplay('fulfilled', v);
+    });
+}
+
+function demoAll() {
+  log('info', 'MyPromise.all([3 async promises])');
+  setStateDisplay('pending');
+  const p1 = delay(300).then(() => { log('resolve', 'Promise 1 resolved', 'A'); return 'A'; });
+  const p2 = delay(600).then(() => { log('resolve', 'Promise 2 resolved', 'B'); return 'B'; });
+  const p3 = delay(450).then(() => { log('resolve', 'Promise 3 resolved', 'C'); return 'C'; });
+  MyPromise.all([p1, p2, p3]).then(results => {
+    log('all', 'All settled → .all resolved', JSON.stringify(results));
+    setStateDisplay('fulfilled', results);
+  });
+}
+
+function demoAllFail() {
+  log('info', 'MyPromise.all — one promise fails → all fails');
+  setStateDisplay('pending');
+  const p1 = delay(300).then(() => { log('resolve', 'Promise 1 resolved'); return 'A'; });
+  const p2 = delay(450).then(() => { throw new Error('P2 failed'); });
+  const p3 = delay(600).then(() => { log('resolve', 'Promise 3 resolved (too late)'); return 'C'; });
+  MyPromise.all([p1, p2, p3])
+    .then(r  => log('all', '.all resolved', r))
+    .catch(e => {
+      log('reject', '.all rejected — first failure wins', e.message);
+      setStateDisplay('rejected', e.message);
+    });
+}
+
+function demoRace() {
+  log('info', 'MyPromise.race — first to settle wins');
+  setStateDisplay('pending');
+  const p1 = delay(700).then(() => { log('resolve', 'Promise 1 (slow) resolved'); return 'slow'; });
+  const p2 = delay(250).then(() => { log('resolve', 'Promise 2 (fast) resolved'); return 'fast'; });
+  const p3 = delay(500).then(() => { log('resolve', 'Promise 3 (medium) resolved'); return 'medium'; });
+  MyPromise.race([p1, p2, p3]).then(winner => {
+    log('race', '.race winner!', winner);
+    setStateDisplay('fulfilled', winner);
+  });
+}
+
+function demoFetch() {
+  log('info', 'fetchUser(1) — simulated network request');
+  setStateDisplay('pending');
+  fetchUser(1).then(user => {
+    log('resolve', 'User fetched', JSON.stringify(user));
+    setStateDisplay('fulfilled', user);
+  });
+}
+
+function demoFetchChain() {
+  log('info', 'fetchUser(1) → fetchPosts(user.id) — chained async');
+  setStateDisplay('pending');
+  fetchUser(1)
+    .then(user => {
+      log('then', 'Got user, fetching posts', user.name);
+      return fetchPosts(user.id);
+    })
+    .then(posts => {
+      log('then', 'Got posts', JSON.stringify(posts));
+      setStateDisplay('fulfilled', posts);
+    });
+}
+
+function demoFetchFail() {
+  log('info', 'fetchUser(999) — user does not exist');
+  setStateDisplay('pending');
+  fetchUser(999)
+    .then(user => log('then', 'User:', user))
+    .catch(err => {
+      log('reject', 'Fetch failed', err.message);
+      setStateDisplay('rejected', err.message);
+    });
+}
+</script>
+</body>
+</html>
