@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Build Your Own Array Methods — Chapter 3</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0e1a;
+      color: #cdd9e5;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 { color: #79c0ff; font-size: 1.25em; margin-bottom: 4px; }
+    .subtitle { color: #484f58; font-size: 0.82em; margin-bottom: 24px; }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 960px; }
+    @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #161b22; border: 1px solid #21262d;
+      border-radius: 8px; padding: 18px;
+    }
+    .card h2 {
+      font-size: 0.78em; color: #8b949e;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+
+    textarea {
+      width: 100%; background: #0d1117; color: #cdd9e5;
+      border: 1px solid #30363d; border-radius: 6px;
+      padding: 10px; font-family: 'Courier New', monospace;
+      font-size: 0.82em; resize: vertical;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { outline: none; border-color: #79c0ff; }
+
+    .method-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px; margin-bottom: 14px;
+    }
+    .method-btn {
+      background: #0d1117; color: #cdd9e5;
+      border: 1px solid #30363d; border-radius: 6px;
+      padding: 8px 10px; font-family: 'Courier New', monospace;
+      font-size: 0.8em; cursor: pointer; text-align: left;
+      transition: all 0.15s;
+    }
+    .method-btn:hover { border-color: #79c0ff; color: #79c0ff; }
+    .method-btn.active { border-color: #79c0ff; background: #102030; color: #79c0ff; }
+
+    .config-area { margin-top: 12px; }
+    label { font-size: 0.78em; color: #8b949e; display: block; margin-bottom: 5px; }
+    input[type=text] {
+      width: 100%; background: #0d1117; color: #cdd9e5;
+      border: 1px solid #30363d; border-radius: 5px;
+      padding: 7px 10px; font-family: 'Courier New', monospace;
+      font-size: 0.82em;
+    }
+    input[type=text]:focus { outline: none; border-color: #79c0ff; }
+
+    .run-btn {
+      width: 100%; margin-top: 12px;
+      background: #1f6feb; color: #fff;
+      border: none; border-radius: 6px;
+      padding: 9px; font-size: 0.88em;
+      cursor: pointer; font-family: monospace;
+      transition: background 0.15s;
+    }
+    .run-btn:hover { background: #388bfd; }
+
+    /* Output panel */
+    .steps { display: flex; flex-direction: column; gap: 10px; }
+    .step {
+      background: #0d1117; border: 1px solid #21262d;
+      border-radius: 5px; padding: 10px 12px;
+      font-size: 0.8em;
+    }
+    .step-label {
+      color: #8b949e; margin-bottom: 4px; font-size: 0.85em;
+    }
+    .step-label .name { color: #79c0ff; font-weight: bold; }
+    .step-code {
+      color: #e3b341; margin-bottom: 6px; font-size: 0.9em;
+    }
+    .step-result { color: #3fb950; }
+    .step-result.error { color: #f85149; }
+
+    /* Internals panel */
+    .internals {
+      background: #0d1117; border: 1px solid #21262d;
+      border-radius: 5px; padding: 12px;
+      font-size: 0.8em;
+    }
+    .iteration {
+      display: flex; gap: 8px; padding: 3px 0;
+      border-bottom: 1px solid #161b22; align-items: baseline;
+    }
+    .iteration:last-child { border-bottom: none; }
+    .iter-i   { color: #8b949e; width: 30px; flex-shrink: 0; }
+    .iter-item { color: #cdd9e5; width: 90px; flex-shrink: 0; }
+    .iter-fn  { color: #e3b341; flex: 1; }
+    .iter-acc { color: #3fb950; }
+
+    .empty-state {
+      color: #484f58; text-align: center; padding: 40px 20px;
+      font-size: 0.85em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Build Your Own Array Methods</h1>
+  <p class="subtitle">Chapter 3 — loops, arrays, callbacks, and the three patterns that power every collection operation</p>
+
+  <div class="layout">
+    <!-- Left: input + controls -->
+    <div>
+      <div class="card">
+        <h2>Input Array</h2>
+        <textarea id="arrayInput" rows="3">[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</textarea>
+
+        <h2 style="margin-top:14px">Method</h2>
+        <div class="method-grid">
+          <button class="method-btn active" onclick="selectMethod('map')">.map(fn)</button>
+          <button class="method-btn" onclick="selectMethod('filter')">.filter(fn)</button>
+          <button class="method-btn" onclick="selectMethod('reduce')">.reduce(fn, init)</button>
+          <button class="method-btn" onclick="selectMethod('find')">.find(fn)</button>
+          <button class="method-btn" onclick="selectMethod('every')">.every(fn)</button>
+          <button class="method-btn" onclick="selectMethod('some')">.some(fn)</button>
+          <button class="method-btn" onclick="selectMethod('forEach')">.forEach(fn)</button>
+          <button class="method-btn" onclick="selectMethod('flat')">.flat()</button>
+        </div>
+
+        <div class="config-area" id="configArea">
+          <label id="fnLabel">Callback: fn(item, index, array) → value</label>
+          <input type="text" id="fnInput" value="item * item" />
+          <div id="reduceInit" style="display:none; margin-top:8px">
+            <label>Initial accumulator value</label>
+            <input type="text" id="initInput" value="0" />
+          </div>
+        </div>
+
+        <button class="run-btn" onclick="runMethod()">Run  ▶</button>
+      </div>
+
+      <!-- Quick presets -->
+      <div class="card" style="margin-top:16px">
+        <h2>Try These</h2>
+        <div style="display:flex; flex-direction:column; gap:6px">
+          <button class="method-btn" onclick="loadPreset('squares')">map: square each number</button>
+          <button class="method-btn" onclick="loadPreset('evens')">filter: keep even numbers</button>
+          <button class="method-btn" onclick="loadPreset('sum')">reduce: sum all numbers</button>
+          <button class="method-btn" onclick="loadPreset('firstBig')">find: first number > 5</button>
+          <button class="method-btn" onclick="loadPreset('allPos')">every: all positive?</button>
+          <button class="method-btn" onclick="loadPreset('words')">map words: uppercase + length</button>
+          <button class="method-btn" onclick="loadPreset('nested')">flat: flatten nested array</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: output -->
+    <div>
+      <div class="card">
+        <h2>Result</h2>
+        <div id="outputSteps" class="steps">
+          <div class="empty-state">Run a method to see results and step-by-step internals</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Iteration Trace <span style="color:#484f58;font-weight:normal">(first 10 steps)</span></h2>
+        <div id="iterTrace" class="internals">
+          <div class="empty-state">The loop internals will appear here</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: arr — our own Array methods
+//
+//  Each function is a manual re-implementation of the native equivalent.
+//  They exist to show you exactly what the native methods do internally.
+// ═══════════════════════════════════════════════════════════════════════
+
+const arr = {};
+
+// ─── arr.forEach ──────────────────────────────────────────────────────
+// Call fn once for each element. Return nothing (undefined).
+// Pattern: visit — do something with each element.
+
+arr.forEach = function(array, fn) {
+  for (let i = 0; i < array.length; i++) {
+    fn(array[i], i, array);    // (item, index, array) — same signature as native
+  }
+  // No return value. forEach is for side effects, not transformations.
+};
+
+
+// ─── arr.map ──────────────────────────────────────────────────────────
+// Apply fn to every element. Collect results. Return a NEW array.
+// Pattern: transform — change every element.
+
+arr.map = function(array, fn) {
+  const result = [];
+  for (let i = 0; i < array.length; i++) {
+    result.push(fn(array[i], i, array));  // push the RETURN VALUE of fn
+  }
+  return result;
+  // Original array is never modified.
+};
+
+
+// ─── arr.filter ───────────────────────────────────────────────────────
+// Keep elements where fn returns true. Return a NEW array.
+// Pattern: select — only keep what you want.
+
+arr.filter = function(array, fn) {
+  const result = [];
+  for (let i = 0; i < array.length; i++) {
+    if (fn(array[i], i, array)) {    // fn returns boolean (or truthy/falsy)
+      result.push(array[i]);         // push the ORIGINAL item, not fn's return
+    }
+  }
+  return result;
+};
+
+
+// ─── arr.reduce ───────────────────────────────────────────────────────
+// Collapse the entire array to a single value.
+// Pattern: accumulate — boil many things down to one.
+
+arr.reduce = function(array, fn, initial) {
+  let acc = initial;             // acc = "accumulator" — the running total
+  for (let i = 0; i < array.length; i++) {
+    acc = fn(acc, array[i], i, array);  // fn receives (accumulator, item, index, array)
+    // acc's new value is whatever fn returns
+  }
+  return acc;
+  // The accumulator can be anything: number, string, array, object...
+};
+
+
+// ─── arr.find ─────────────────────────────────────────────────────────
+// Return the FIRST element where fn returns true. Or undefined.
+// Pattern: search — stop at the first match.
+
+arr.find = function(array, fn) {
+  for (let i = 0; i < array.length; i++) {
+    if (fn(array[i], i, array)) {
+      return array[i];      // found it — stop immediately, return the element
+    }
+  }
+  return undefined;         // no match found
+};
+
+
+// ─── arr.every ────────────────────────────────────────────────────────
+// Return true if fn returns true for ALL elements. False if any fail.
+// Pattern: all — stop and return false at first failure.
+
+arr.every = function(array, fn) {
+  for (let i = 0; i < array.length; i++) {
+    if (!fn(array[i], i, array)) {
+      return false;    // one failure means the whole thing fails
+    }
+  }
+  return true;         // made it through all elements — all passed
+};
+
+
+// ─── arr.some ─────────────────────────────────────────────────────────
+// Return true if fn returns true for AT LEAST ONE element.
+// Pattern: any — stop and return true at first match.
+
+arr.some = function(array, fn) {
+  for (let i = 0; i < array.length; i++) {
+    if (fn(array[i], i, array)) {
+      return true;     // one match is enough
+    }
+  }
+  return false;        // no match found in the whole array
+};
+
+
+// ─── arr.flat ─────────────────────────────────────────────────────────
+// Flatten one level of nesting. [1, [2, 3], [4, [5]]] → [1, 2, 3, 4, [5]]
+// Pattern: unwrap — remove one layer of array wrapping.
+
+arr.flat = function(array) {
+  const result = [];
+  for (const item of array) {
+    if (Array.isArray(item)) {
+      // It's a nested array — spread its elements in
+      for (const inner of item) {
+        result.push(inner);
+      }
+    } else {
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  INSTRUMENTED VERSIONS — same logic, but track each iteration
+//  so the UI can show the step-by-step loop trace.
+// ═══════════════════════════════════════════════════════════════════════
+
+function runWithTrace(method, array, fn, initial) {
+  const trace = [];
+  const MAX_TRACE = 10;
+
+  if (method === 'map') {
+    const result = [];
+    for (let i = 0; i < array.length; i++) {
+      const out = fn(array[i], i, array);
+      result.push(out);
+      if (i < MAX_TRACE) trace.push({
+        i, item: array[i],
+        expr: `fn(${JSON.stringify(array[i])})`,
+        result: JSON.stringify(out)
+      });
+    }
+    return { result, trace };
+  }
+
+  if (method === 'filter') {
+    const result = [];
+    for (let i = 0; i < array.length; i++) {
+      const keep = fn(array[i], i, array);
+      if (keep) result.push(array[i]);
+      if (i < MAX_TRACE) trace.push({
+        i, item: array[i],
+        expr: `fn(${JSON.stringify(array[i])}) → ${keep}`,
+        result: keep ? 'kept' : 'dropped'
+      });
+    }
+    return { result, trace };
+  }
+
+  if (method === 'reduce') {
+    let acc = initial;
+    for (let i = 0; i < array.length; i++) {
+      const prevAcc = acc;
+      acc = fn(acc, array[i], i, array);
+      if (i < MAX_TRACE) trace.push({
+        i, item: array[i],
+        expr: `fn(${JSON.stringify(prevAcc)}, ${JSON.stringify(array[i])})`,
+        result: `acc = ${JSON.stringify(acc)}`
+      });
+    }
+    return { result: acc, trace };
+  }
+
+  if (method === 'find') {
+    for (let i = 0; i < array.length; i++) {
+      const match = fn(array[i], i, array);
+      if (i < MAX_TRACE) trace.push({
+        i, item: array[i],
+        expr: `fn(${JSON.stringify(array[i])}) → ${match}`,
+        result: match ? '← FOUND, stop' : 'continue'
+      });
+      if (match) return { result: array[i], trace };
+    }
+    return { result: undefined, trace };
+  }
+
+  if (method === 'every') {
+    for (let i = 0; i < array.length; i++) {
+      const pass = fn(array[i], i, array);
+      trace.push({
+        i, item: array[i],
+        expr: `fn(${JSON.stringify(array[i])}) → ${pass}`,
+        result: pass ? 'continue' : '← false, stop early'
+      });
+      if (!pass) return { result: false, trace };
+    }
+    return { result: true, trace };
+  }
+
+  if (method === 'some') {
+    for (let i = 0; i < array.length; i++) {
+      const pass = fn(array[i], i, array);
+      trace.push({
+        i, item: array[i],
+        expr: `fn(${JSON.stringify(array[i])}) → ${pass}`,
+        result: pass ? '← true, stop early' : 'continue'
+      });
+      if (pass) return { result: true, trace };
+    }
+    return { result: false, trace };
+  }
+
+  if (method === 'forEach') {
+    for (let i = 0; i < array.length && i < MAX_TRACE; i++) {
+      fn(array[i], i, array);
+      trace.push({ i, item: array[i], expr: `fn(${JSON.stringify(array[i])})`, result: 'void' });
+    }
+    return { result: undefined, trace };
+  }
+
+  if (method === 'flat') {
+    const result = [];
+    for (let i = 0; i < array.length; i++) {
+      const item = array[i];
+      const isArr = Array.isArray(item);
+      if (isArr) for (const inner of item) result.push(inner);
+      else result.push(item);
+      if (i < MAX_TRACE) trace.push({
+        i, item,
+        expr: isArr ? `Array.isArray → spread ${JSON.stringify(item)}` : 'not array',
+        result: isArr ? JSON.stringify(item) + ' → spread' : 'kept as-is'
+      });
+    }
+    return { result, trace };
+  }
+
+  return { result: null, trace: [] };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  APPLICATION
+// ═══════════════════════════════════════════════════════════════════════
+
+let currentMethod = 'map';
+
+const METHOD_CONFIG = {
+  map:     { fnLabel: 'Callback: fn(item, index) → newValue',         fnDefault: 'item * item',       showInit: false },
+  filter:  { fnLabel: 'Predicate: fn(item, index) → true/false',      fnDefault: 'item % 2 === 0',    showInit: false },
+  reduce:  { fnLabel: 'Reducer: fn(acc, item, index) → newAcc',       fnDefault: 'acc + item',        showInit: true  },
+  find:    { fnLabel: 'Predicate: fn(item, index) → true/false',      fnDefault: 'item > 5',          showInit: false },
+  every:   { fnLabel: 'Predicate: fn(item, index) → true/false',      fnDefault: 'item > 0',          showInit: false },
+  some:    { fnLabel: 'Predicate: fn(item, index) → true/false',      fnDefault: 'item > 8',          showInit: false },
+  forEach: { fnLabel: 'Callback: fn(item, index) → (side effect)',    fnDefault: 'item * 2 /* forEach returns nothing */', showInit: false },
+  flat:    { fnLabel: '(no callback — flat takes no function)',        fnDefault: '',                  showInit: false }
+};
+
+function selectMethod(method) {
+  currentMethod = method;
+
+  document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.method-btn[onclick="selectMethod('${method}')"]`).classList.add('active');
+
+  const config = METHOD_CONFIG[method];
+  document.getElementById('fnLabel').textContent = config.fnLabel;
+  if (config.fnDefault !== undefined) document.getElementById('fnInput').value = config.fnDefault;
+  document.getElementById('reduceInit').style.display = config.showInit ? 'block' : 'none';
+  document.getElementById('fnInput').disabled = (method === 'flat');
+}
+
+function runMethod() {
+  const arrayText  = document.getElementById('arrayInput').value.trim();
+  const fnText     = document.getElementById('fnInput').value.trim();
+  const initText   = document.getElementById('initInput').value.trim();
+  const outputEl   = document.getElementById('outputSteps');
+  const traceEl    = document.getElementById('iterTrace');
+
+  let inputArray, fn, initial;
+
+  try {
+    inputArray = JSON.parse(arrayText);
+    if (!Array.isArray(inputArray)) throw new Error('Input must be a JSON array');
+  } catch (e) {
+    outputEl.innerHTML = `<div class="step"><div class="step-result error">Parse error: ${escHtml(e.message)}</div></div>`;
+    return;
+  }
+
+  if (currentMethod !== 'flat') {
+    try {
+      // Build callback from the user's expression.
+      // For reduce: fn(acc, item, index, array)
+      // For others: fn(item, index, array)
+      if (currentMethod === 'reduce') {
+        fn = new Function('acc', 'item', 'index', 'array', `return (${fnText});`);
+      } else {
+        fn = new Function('item', 'index', 'array', `return (${fnText});`);
+      }
+    } catch (e) {
+      outputEl.innerHTML = `<div class="step"><div class="step-result error">Function error: ${escHtml(e.message)}</div></div>`;
+      return;
+    }
+  }
+
+  if (currentMethod === 'reduce') {
+    try { initial = JSON.parse(initText); }
+    catch (e) {
+      outputEl.innerHTML = `<div class="step"><div class="step-result error">Initial value error: ${escHtml(e.message)}</div></div>`;
+      return;
+    }
+  }
+
+  let result, trace;
+  try {
+    ({ result, trace } = runWithTrace(currentMethod, inputArray, fn, initial));
+  } catch (e) {
+    outputEl.innerHTML = `<div class="step"><div class="step-result error">Runtime error: ${escHtml(e.message)}</div></div>`;
+    return;
+  }
+
+  // Render result
+  const nativeCall = buildNativeCall(currentMethod, fnText, initText);
+  outputEl.innerHTML = `
+    <div class="step">
+      <div class="step-label">Expression</div>
+      <div class="step-code">${escHtml(nativeCall)}</div>
+    </div>
+    <div class="step">
+      <div class="step-label">Input  <span style="color:#8b949e">(${inputArray.length} items)</span></div>
+      <div class="step-code">${escHtml(JSON.stringify(inputArray))}</div>
+    </div>
+    <div class="step">
+      <div class="step-label"><span class="name">arr.${currentMethod}()</span> result</div>
+      <div class="step-result">${escHtml(JSON.stringify(result))}</div>
+    </div>
+    <div class="step">
+      <div class="step-label">Native equivalent: <span class="name">Array.prototype.${currentMethod}()</span></div>
+      <div class="step-result">${escHtml(JSON.stringify(runNative(currentMethod, inputArray, fn, initial)))}</div>
+    </div>
+  `;
+
+  // Render trace
+  if (trace.length === 0) {
+    traceEl.innerHTML = '<div class="empty-state">No iterations (empty array?)</div>';
+    return;
+  }
+
+  const header = `
+    <div class="iteration" style="color:#8b949e; font-size:0.85em; margin-bottom:4px">
+      <span class="iter-i">i</span>
+      <span class="iter-item">item</span>
+      <span class="iter-fn">operation</span>
+      <span class="iter-acc">result</span>
+    </div>`;
+
+  const rows = trace.map(t => `
+    <div class="iteration">
+      <span class="iter-i">${t.i}</span>
+      <span class="iter-item">${escHtml(JSON.stringify(t.item))}</span>
+      <span class="iter-fn">${escHtml(t.expr)}</span>
+      <span class="iter-acc">${escHtml(t.result)}</span>
+    </div>`).join('');
+
+  const more = inputArray.length > 10
+    ? `<div style="color:#484f58;font-size:0.8em;padding:6px 0">… and ${inputArray.length - 10} more iterations</div>`
+    : '';
+
+  traceEl.innerHTML = header + rows + more;
+}
+
+function buildNativeCall(method, fnText, initText) {
+  if (method === 'flat')   return `array.flat()`;
+  if (method === 'reduce') return `array.reduce((acc, item) => ${fnText}, ${initText})`;
+  return `array.${method}(item => ${fnText})`;
+}
+
+function runNative(method, array, fn, initial) {
+  if (method === 'map')     return array.map(fn);
+  if (method === 'filter')  return array.filter(fn);
+  if (method === 'reduce')  return array.reduce(fn, initial);
+  if (method === 'find')    return array.find(fn);
+  if (method === 'every')   return array.every(fn);
+  if (method === 'some')    return array.some(fn);
+  if (method === 'forEach') { array.forEach(fn); return undefined; }
+  if (method === 'flat')    return array.flat();
+  return null;
+}
+
+const PRESETS = {
+  squares:  { array: '[1,2,3,4,5,6,7,8,9,10]', method: 'map',    fn: 'item * item',            init: '0'  },
+  evens:    { array: '[1,2,3,4,5,6,7,8,9,10]', method: 'filter', fn: 'item % 2 === 0',          init: '0'  },
+  sum:      { array: '[1,2,3,4,5,6,7,8,9,10]', method: 'reduce', fn: 'acc + item',              init: '0'  },
+  firstBig: { array: '[1,2,3,4,5,6,7,8,9,10]', method: 'find',   fn: 'item > 5',               init: '0'  },
+  allPos:   { array: '[1,2,3,4,5,6,7,8,9,10]', method: 'every',  fn: 'item > 0',               init: '0'  },
+  words:    { array: '["hello","world","javascript","arrays"]', method: 'map', fn: '`${item.toUpperCase()} (${item.length})`', init: '""' },
+  nested:   { array: '[[1,2],[3,4],[5,[6,7]]]', method: 'flat',   fn: '',                       init: '0'  }
+};
+
+function loadPreset(name) {
+  const p = PRESETS[name];
+  document.getElementById('arrayInput').value = p.array;
+  document.getElementById('fnInput').value    = p.fn;
+  document.getElementById('initInput').value  = p.init;
+  selectMethod(p.method);
+  runMethod();
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Run the default preset on load
+loadPreset('squares');
+</script>
+</body>
+</html>

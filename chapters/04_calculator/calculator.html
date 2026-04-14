@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Build Your Own Calculator — Chapter 4</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 { color: #d2a8ff; font-size: 1.25em; margin-bottom: 4px; }
+    .subtitle { color: #484f58; font-size: 0.82em; margin-bottom: 24px; }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 960px; }
+    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #161b22; border: 1px solid #21262d;
+      border-radius: 8px; padding: 18px;
+    }
+    .card h2 {
+      font-size: 0.78em; color: #8b949e;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+
+    /* REPL */
+    .history {
+      background: #0d1117; border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 10px; min-height: 280px; max-height: 380px;
+      overflow-y: auto; margin-bottom: 12px;
+    }
+    .entry { padding: 5px 0; border-bottom: 1px solid #161b22; }
+    .entry:last-child { border-bottom: none; }
+    .entry-input { color: #8b949e; font-size: 0.82em; }
+    .entry-input::before { content: '> '; color: #484f58; }
+    .entry-result { color: #3fb950; font-size: 0.88em; padding-left: 14px; }
+    .entry-result.error { color: #f85149; }
+    .entry-result.step  { color: #79c0ff; }
+
+    .repl-row { display: flex; gap: 8px; }
+    .repl-prompt { color: #484f58; line-height: 36px; font-size: 1em; }
+    input[type=text] {
+      flex: 1; background: #0d1117; color: #c9d1d9;
+      border: 1px solid #30363d; border-radius: 5px;
+      padding: 8px 12px; font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+    input[type=text]:focus { outline: none; border-color: #d2a8ff; }
+    .run-btn {
+      background: #3d1f7a; color: #d2a8ff;
+      border: 1px solid #6e40c9; border-radius: 5px;
+      padding: 8px 14px; cursor: pointer;
+      font-family: monospace; font-size: 0.88em;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .run-btn:hover { background: #5a2fa8; }
+
+    /* Quick buttons */
+    .quick-btns {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .qbtn {
+      background: #161b22; color: #8b949e;
+      border: 1px solid #21262d; border-radius: 4px;
+      padding: 4px 10px; font-family: monospace; font-size: 0.78em;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .qbtn:hover { border-color: #d2a8ff; color: #d2a8ff; }
+
+    /* Parse tree panel */
+    .tree-view {
+      background: #0d1117; border: 1px solid #21262d;
+      border-radius: 5px; padding: 12px;
+      min-height: 120px; font-size: 0.8em;
+    }
+    .tree-node { padding: 2px 0; }
+    .node-type  { color: #d2a8ff; }
+    .node-val   { color: #a5d6ff; }
+    .node-op    { color: #e3b341; }
+    .node-left  { color: #8b949e; }
+    .node-indent { padding-left: 18px; border-left: 1px solid #21262d; }
+
+    /* Function inspector */
+    .fn-list { display: flex; flex-direction: column; gap: 6px; }
+    .fn-row {
+      background: #0d1117; border: 1px solid #21262d;
+      border-radius: 4px; padding: 8px 10px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .fn-name { color: #d2a8ff; width: 80px; flex-shrink: 0; }
+    .fn-desc { color: #8b949e; font-size: 0.82em; flex: 1; }
+    .fn-example { color: #3fb950; font-size: 0.78em; }
+
+    .empty-state { color: #484f58; text-align: center; padding: 30px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>Build Your Own Calculator</h1>
+  <p class="subtitle">Chapter 4 — functions, scope, recursion, and parsing text into meaning</p>
+
+  <div class="layout">
+    <!-- Left: REPL -->
+    <div>
+      <div class="card">
+        <h2>Expression REPL</h2>
+        <div class="history" id="history">
+          <div class="empty-state">Type an expression and press Enter</div>
+        </div>
+        <div class="repl-row">
+          <span class="repl-prompt">&gt;</span>
+          <input type="text" id="replInput" placeholder="e.g.  2 + 3 * 4  or  (10 - 4) / 2  or  sqrt(16)" />
+          <button class="run-btn" onclick="evalInput()">Run ↵</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <h2>Quick Examples</h2>
+          <div class="quick-btns">
+            <button class="qbtn" onclick="tryExpr('2 + 3 * 4')">2 + 3 * 4</button>
+            <button class="qbtn" onclick="tryExpr('(2 + 3) * 4')">(2 + 3) * 4</button>
+            <button class="qbtn" onclick="tryExpr('10 / 4')">10 / 4</button>
+            <button class="qbtn" onclick="tryExpr('2 ^ 8')">2 ^ 8</button>
+            <button class="qbtn" onclick="tryExpr('sqrt(144)')">sqrt(144)</button>
+            <button class="qbtn" onclick="tryExpr('abs(-42)')">abs(-42)</button>
+            <button class="qbtn" onclick="tryExpr('max(3, 7, 2)')">max(3,7,2)</button>
+            <button class="qbtn" onclick="tryExpr('((3+5)*2)^2 / 8')">complex</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Built-in Functions</h2>
+        <div class="fn-list">
+          <div class="fn-row">
+            <span class="fn-name">sqrt(x)</span>
+            <div>
+              <div class="fn-desc">Square root</div>
+              <div class="fn-example">sqrt(16) → 4</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">abs(x)</span>
+            <div>
+              <div class="fn-desc">Absolute value</div>
+              <div class="fn-example">abs(-7) → 7</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">floor(x)</span>
+            <div>
+              <div class="fn-desc">Round down to integer</div>
+              <div class="fn-example">floor(3.9) → 3</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">ceil(x)</span>
+            <div>
+              <div class="fn-desc">Round up to integer</div>
+              <div class="fn-example">ceil(3.1) → 4</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">round(x)</span>
+            <div>
+              <div class="fn-desc">Round to nearest integer</div>
+              <div class="fn-example">round(3.6) → 4</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">max(a,b,…)</span>
+            <div>
+              <div class="fn-desc">Maximum of arguments</div>
+              <div class="fn-example">max(3,1,7,2) → 7</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">min(a,b,…)</span>
+            <div>
+              <div class="fn-desc">Minimum of arguments</div>
+              <div class="fn-example">min(3,1,7,2) → 1</div>
+            </div>
+          </div>
+          <div class="fn-row">
+            <span class="fn-name">log(x)</span>
+            <div>
+              <div class="fn-desc">Natural logarithm</div>
+              <div class="fn-example">log(1) → 0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: parse tree and token stream -->
+    <div>
+      <div class="card">
+        <h2>Token Stream</h2>
+        <div id="tokenView" class="tree-view">
+          <div class="empty-state">Tokens will appear after you run an expression</div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h2>Parse Tree (AST)</h2>
+        <div id="treeView" class="tree-view">
+          <div class="empty-state">Abstract Syntax Tree will appear here</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  THE LIBRARY: calc
+//
+//  A recursive-descent parser and evaluator for arithmetic expressions.
+//  Supports: + - * / ^ (power), parentheses, and built-in functions.
+//
+//  Architecture:
+//    1. tokenize(input) → array of Token objects
+//    2. parse(tokens)   → AST (tree of Node objects)
+//    3. evaluate(ast)   → number
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ─── Step 1: Tokenizer ────────────────────────────────────────────────
+//
+// Split the input string into a flat list of typed tokens.
+// "2 + 3 * 4" → [Number(2), Op(+), Number(3), Op(*), Number(4)]
+
+function tokenize(input) {
+  const tokens = [];
+  let i = 0;
+
+  while (i < input.length) {
+    const ch = input[i];
+
+    // Skip whitespace
+    if (ch === ' ' || ch === '\t') { i++; continue; }
+
+    // Number (including decimals and negatives)
+    if (ch >= '0' && ch <= '9' || (ch === '-' && tokens.length === 0)) {
+      let num = '';
+      if (ch === '-') { num = '-'; i++; }
+      while (i < input.length && (input[i] >= '0' && input[i] <= '9' || input[i] === '.')) {
+        num += input[i++];
+      }
+      tokens.push({ type: 'number', value: parseFloat(num) });
+      continue;
+    }
+
+    // Function name or identifier: letters followed by letters/digits
+    if (ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z') {
+      let name = '';
+      while (i < input.length && (input[i] >= 'a' && input[i] <= 'z' ||
+             input[i] >= 'A' && input[i] <= 'Z' || input[i] >= '0' && input[i] <= '9')) {
+        name += input[i++];
+      }
+      tokens.push({ type: 'name', value: name });
+      continue;
+    }
+
+    // Operators and punctuation
+    if ('+-*/^(),'.includes(ch)) {
+      tokens.push({ type: ch === ',' ? 'comma' : 'op', value: ch });
+      i++;
+      continue;
+    }
+
+    throw new Error(`Unexpected character: "${ch}" at position ${i}`);
+  }
+
+  tokens.push({ type: 'end', value: null });   // sentinel: marks end of input
+  return tokens;
+}
+
+
+// ─── Step 2: Recursive-Descent Parser ────────────────────────────────
+//
+// Build a tree from the flat token list.
+// The grammar:
+//   expr       = term (('+' | '-') term)*
+//   term       = power (('*' | '/') power)*
+//   power      = unary ('^' unary)*         ← right-associative
+//   unary      = '-' unary | call
+//   call       = name '(' args ')' | primary
+//   primary    = number | '(' expr ')'
+//
+// Each grammar rule is one function. They call each other recursively.
+// Operator precedence falls out naturally: lower rules bind tighter.
+
+function parse(tokens) {
+  let pos = 0;   // current position in the tokens array
+
+  // Helper: look at current token
+  function peek()    { return tokens[pos]; }
+  // Helper: consume and return current token
+  function consume() { return tokens[pos++]; }
+  // Helper: consume if token matches, else throw
+  function expect(type, value) {
+    const tok = consume();
+    if (value !== undefined && tok.value !== value)
+      throw new Error(`Expected "${value}", got "${tok.value}"`);
+    if (tok.type !== type)
+      throw new Error(`Expected ${type}, got ${tok.type}`);
+    return tok;
+  }
+
+  // Parse addition and subtraction (lowest precedence)
+  function parseExpr() {
+    let left = parseTerm();
+    while (peek().type === 'op' && (peek().value === '+' || peek().value === '-')) {
+      const op = consume().value;
+      const right = parseTerm();
+      left = { type: 'binary', op, left, right };
+    }
+    return left;
+  }
+
+  // Parse multiplication and division (medium precedence)
+  function parseTerm() {
+    let left = parsePower();
+    while (peek().type === 'op' && (peek().value === '*' || peek().value === '/')) {
+      const op = consume().value;
+      const right = parsePower();
+      left = { type: 'binary', op, left, right };
+    }
+    return left;
+  }
+
+  // Parse exponentiation (high precedence, right-associative)
+  function parsePower() {
+    let base = parseUnary();
+    if (peek().type === 'op' && peek().value === '^') {
+      consume();
+      const exp = parsePower();   // right-associative: parse another power on right side
+      return { type: 'binary', op: '^', left: base, right: exp };
+    }
+    return base;
+  }
+
+  // Parse unary minus
+  function parseUnary() {
+    if (peek().type === 'op' && peek().value === '-') {
+      consume();
+      const operand = parseUnary();
+      return { type: 'unary', op: '-', operand };
+    }
+    return parseCall();
+  }
+
+  // Parse function calls like sqrt(16) or max(3, 7, 2)
+  function parseCall() {
+    const tok = peek();
+    if (tok.type === 'name') {
+      consume();
+      // Is this a function call? Check for opening paren
+      if (peek().type === 'op' && peek().value === '(') {
+        expect('op', '(');
+        const args = [];
+        // Parse comma-separated arguments
+        if (!(peek().type === 'op' && peek().value === ')')) {
+          args.push(parseExpr());
+          while (peek().type === 'comma') {
+            consume();
+            args.push(parseExpr());
+          }
+        }
+        expect('op', ')');
+        return { type: 'call', name: tok.value, args };
+      }
+      // Not a call — bare name (could be a constant like 'pi')
+      return { type: 'name', value: tok.value };
+    }
+    return parsePrimary();
+  }
+
+  // Parse a number or a parenthesised expression
+  function parsePrimary() {
+    const tok = peek();
+
+    if (tok.type === 'number') {
+      consume();
+      return { type: 'number', value: tok.value };
+    }
+
+    if (tok.type === 'op' && tok.value === '(') {
+      consume();
+      const inner = parseExpr();
+      expect('op', ')');
+      return inner;
+    }
+
+    throw new Error(`Unexpected token: "${tok.value}" (type: ${tok.type})`);
+  }
+
+  const ast = parseExpr();
+
+  // Should have consumed everything
+  if (peek().type !== 'end') {
+    throw new Error(`Unexpected token after expression: "${peek().value}"`);
+  }
+
+  return ast;
+}
+
+
+// ─── Step 3: Evaluator ────────────────────────────────────────────────
+//
+// Walk the AST recursively and compute the result.
+// Each node type has a corresponding case.
+
+// Built-in functions — stored in an object (function registry)
+const FUNCTIONS = {
+  sqrt:  (args) => Math.sqrt(args[0]),
+  abs:   (args) => Math.abs(args[0]),
+  floor: (args) => Math.floor(args[0]),
+  ceil:  (args) => Math.ceil(args[0]),
+  round: (args) => Math.round(args[0]),
+  log:   (args) => Math.log(args[0]),
+  max:   (args) => Math.max(...args),
+  min:   (args) => Math.min(...args),
+  sin:   (args) => Math.sin(args[0]),
+  cos:   (args) => Math.cos(args[0]),
+  tan:   (args) => Math.tan(args[0]),
+};
+
+// Built-in constants
+const CONSTANTS = {
+  pi: Math.PI,
+  e:  Math.E,
+};
+
+function evaluate(node) {
+  if (node.type === 'number') {
+    return node.value;   // base case: a literal number
+  }
+
+  if (node.type === 'name') {
+    // Look up a constant (pi, e, etc.)
+    if (node.value in CONSTANTS) return CONSTANTS[node.value];
+    throw new Error(`Unknown variable: ${node.value}`);
+  }
+
+  if (node.type === 'unary') {
+    const val = evaluate(node.operand);   // recurse into operand
+    if (node.op === '-') return -val;
+    throw new Error(`Unknown unary operator: ${node.op}`);
+  }
+
+  if (node.type === 'binary') {
+    const left  = evaluate(node.left);   // recurse left
+    const right = evaluate(node.right);  // recurse right
+    switch (node.op) {
+      case '+': return left + right;
+      case '-': return left - right;
+      case '*': return left * right;
+      case '/':
+        if (right === 0) throw new Error('Division by zero');
+        return left / right;
+      case '^': return Math.pow(left, right);
+      default:  throw new Error(`Unknown operator: ${node.op}`);
+    }
+  }
+
+  if (node.type === 'call') {
+    const fn = FUNCTIONS[node.name];
+    if (!fn) throw new Error(`Unknown function: ${node.name}()`);
+    const args = node.args.map(evaluate);   // evaluate each argument
+    return fn(args);
+  }
+
+  throw new Error(`Unknown node type: ${node.type}`);
+}
+
+
+// ─── The public API ───────────────────────────────────────────────────
+
+const calc = {
+  // evaluate: main entry point — takes a string, returns a number
+  evaluate: function(input) {
+    const tokens = tokenize(input.trim());
+    const ast    = parse(tokens);
+    return evaluate(ast);
+  },
+
+  // tokenize: exposed for inspection
+  tokenize,
+
+  // parse: exposed for inspection
+  parse: function(input) {
+    const tokens = tokenize(input.trim());
+    return parse(tokens);
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  APPLICATION
+// ═══════════════════════════════════════════════════════════════════════
+
+const replHistory = [];
+
+function evalInput() {
+  const input = document.getElementById('replInput').value.trim();
+  if (!input) return;
+
+  document.getElementById('replInput').value = '';
+  addToRepl(input);
+}
+
+function addToRepl(input) {
+  const histEl = document.getElementById('history');
+  const emptyMsg = histEl.querySelector('.empty-state');
+  if (emptyMsg) emptyMsg.remove();
+
+  let resultText, isError;
+  try {
+    const result = calc.evaluate(input);
+    // Format: integers cleanly, floats to reasonable precision
+    resultText = Number.isInteger(result) ? String(result) : result.toPrecision(10).replace(/\.?0+$/, '');
+    isError    = false;
+
+    // Update visualizers
+    renderTokens(input);
+    renderTree(input);
+  } catch (e) {
+    resultText = e.message;
+    isError    = true;
+  }
+
+  replHistory.push({ input, result: resultText, isError });
+
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  entry.innerHTML = `
+    <div class="entry-input">${escHtml(input)}</div>
+    <div class="entry-result ${isError ? 'error' : ''}">${escHtml(resultText)}</div>
+  `;
+  histEl.appendChild(entry);
+  histEl.scrollTop = histEl.scrollHeight;
+}
+
+function tryExpr(expr) {
+  document.getElementById('replInput').value = expr;
+  addToRepl(expr);
+  document.getElementById('replInput').focus();
+}
+
+function renderTokens(input) {
+  const view = document.getElementById('tokenView');
+  try {
+    const tokens = calc.tokenize(input.trim());
+    // Remove end sentinel for display
+    const displayTokens = tokens.filter(t => t.type !== 'end');
+
+    const html = displayTokens.map(t => {
+      const cls = t.type === 'number' ? 'node-val' :
+                  t.type === 'name'   ? 'node-type' :
+                  t.type === 'op'     ? 'node-op' : 'node-left';
+      return `<span class="${cls}" style="display:inline-block;margin:3px;padding:2px 8px;background:#0a0e1a;border:1px solid #21262d;border-radius:3px">${escHtml(t.type)}:${escHtml(String(t.value))}</span>`;
+    }).join('');
+
+    view.innerHTML = html || '<div class="empty-state">No tokens</div>';
+  } catch (e) {
+    view.innerHTML = `<span class="entry-result error">${escHtml(e.message)}</span>`;
+  }
+}
+
+function renderTree(input) {
+  const view = document.getElementById('treeView');
+  try {
+    const ast = calc.parse(input.trim());
+    view.innerHTML = renderNode(ast, 0);
+  } catch (e) {
+    view.innerHTML = `<span class="entry-result error">${escHtml(e.message)}</span>`;
+  }
+}
+
+function renderNode(node, depth) {
+  const indent = depth > 0 ? `<div class="node-indent">` : '<div>';
+
+  if (node.type === 'number') {
+    return `${indent}<span class="node-val">Number(${node.value})</span></div>`;
+  }
+  if (node.type === 'name') {
+    return `${indent}<span class="node-type">Name(${escHtml(node.value)})</span></div>`;
+  }
+  if (node.type === 'unary') {
+    return `${indent}
+      <span class="node-op">Unary(${escHtml(node.op)})</span>
+      ${renderNode(node.operand, depth + 1)}
+    </div>`;
+  }
+  if (node.type === 'binary') {
+    return `${indent}
+      <span class="node-op">Binary(${escHtml(node.op)})</span>
+      <div style="padding-left:14px;font-size:0.85em;color:#484f58">left:</div>
+      ${renderNode(node.left, depth + 1)}
+      <div style="padding-left:14px;font-size:0.85em;color:#484f58">right:</div>
+      ${renderNode(node.right, depth + 1)}
+    </div>`;
+  }
+  if (node.type === 'call') {
+    const argNodes = node.args.map(a => renderNode(a, depth + 1)).join('');
+    return `${indent}
+      <span class="node-type">Call(${escHtml(node.name)})</span>
+      <div style="padding-left:14px;font-size:0.85em;color:#484f58">args:</div>
+      ${argNodes}
+    </div>`;
+  }
+  return `${indent}?</div>`;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+document.getElementById('replInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') evalInput();
+});
+
+// Seed with a welcome expression
+setTimeout(() => addToRepl('(2 + 3) * 4'), 100);
+</script>
+</body>
+</html>
