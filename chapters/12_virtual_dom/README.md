@@ -100,6 +100,8 @@ reconcileChildren(el, oldVNode.children, newVNode.children);
 
 `updateProps` does two passes: first remove deleted props, then set new or changed ones. It uses `!==` comparison — which is why immutable state is so valuable here. If an object reference didn't change, the prop didn't change, and `setProp` is never called.
 
+For beginners, this is the key connection: immutable data makes comparison easier. If you create a new object only when something changed, then the diffing code can spot change with a simple comparison instead of re-checking everything deeply.
+
 `reconcileChildren` loops to `Math.max(old.length, new.length)` — handling both additions (old is shorter) and removals (new is shorter) in one loop. The `removals` counter adjusts the real DOM index as nodes are removed (see the diagram in the reconcileChildren section).
 
 ---
@@ -490,6 +492,8 @@ function update() {
 ```
 
 `view` is a pure function: state in, vnode tree out. `patch` diffs that tree against the previous one and mutates the real DOM. `currentVNode` holds the "last known state of the DOM" in object form. The cycle: state changes → `setState` calls `update` → new vnode computed → diffed against old → minimal DOM ops applied → `currentVNode` updated.
+
+That full loop is worth reading several times. It is one of the central patterns in modern frontend programming. Once you understand that loop, React-style rendering stops feeling magical and starts feeling mechanical.
 
 This is the pattern React, Preact, and Vue all follow under the hood. The surface API differs; the loop is the same.
 

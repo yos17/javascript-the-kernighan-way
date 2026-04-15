@@ -157,6 +157,8 @@ if (typeof enhancer !== 'undefined') {
 
 This means `applyMiddleware` returns a function that *wraps* `createStore` — giving it complete control over store creation while still using the original `createStore` for the base store. The pattern is called a store enhancer.
 
+If that feels abstract, think of middleware as a layer around `dispatch`. The action does not go straight to the reducer anymore. It passes through extra functions first. Those functions can log, delay, transform, or block actions before they continue.
+
 ---
 
 ## The Complete Program
@@ -400,6 +402,8 @@ function createStore(reducer, initialState, enhancer) {
 ```
 
 The `isDispatching` flag guards against a reducer calling `store.dispatch()` — which would cause infinite recursion. The `@@MINIREDUX/INIT` dispatch on creation seeds the state: every reducer's `default` case returns its initial state (e.g., `state = []`), so the full state tree is populated before any user action.
+
+That guard is another useful beginner lesson: some rules in a system exist not because the happy path needs them, but because they prevent confusing bugs.
 
 ### `subscribe()` — The Pub/Sub Pattern
 

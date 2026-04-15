@@ -8,6 +8,8 @@ A debugger feels like an expert tool, but it becomes much less scary once you un
 
 Before building a debugger, you need to be fluent with the ones you already have. A developer who can't use the debugger effectively spends ten times longer finding bugs.
 
+For beginners, a debugger is best understood as a pause button plus an inspection window. It stops the program at a specific moment and lets you look around. That is much easier than guessing from `console.log` output after the fact.
+
 ---
 
 ### The `debugger` Statement
@@ -97,6 +99,8 @@ When to use each:
 - **Step Out** when you accidentally stepped into something you didn't mean to (like a library function). Jump back to the caller.
 - **Resume** when you've set a second breakpoint further down and want to skip to it.
 
+A useful beginner habit is to predict what the next line will do before you step. Then compare your prediction with what actually happens. That turns debugging into active learning, not just bug hunting.
+
 ---
 
 ### Inspecting Variables and Scope
@@ -122,6 +126,8 @@ Scope Panels:
 **Local** — variables declared in the current function.
 **Closure** — variables from outer functions that the current function closes over.
 **Global** — everything on `window`.
+
+If closures still feel confusing, read that middle panel as "variables this function can still see from outside itself." That mental model is usually enough to make the scope view useful.
 
 Hover over any variable in the source code panel — its current value appears in a tooltip. Click a value to edit it and change it mid-execution. This is useful for testing: "what happens if `n` is -1 here?"
 

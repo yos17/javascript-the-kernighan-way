@@ -8,6 +8,8 @@ A router is the piece that makes a browser app feel like a multi-page site witho
 
 You have a multi-page app — a home page, a user list, user detail pages with dynamic IDs, a blog with tag filtering. In a traditional website, each URL triggers a server request. In a single-page app, JavaScript handles everything: the URL changes but no request is made. Build the router and you'll understand how React Router's `<Route path="/users/:id">` works at the machine level.
 
+A beginner-friendly way to think about a router is: it is just an `if/else` system for URLs. Instead of asking "is this button clicked?" you ask "does this URL match this pattern?" Then you run the code for that page.
+
 ---
 
 ## Building It Step by Step
@@ -51,6 +53,15 @@ router
 ```
 
 This is already useful. You can pass the router around, register routes anywhere in your code, and the `hashchange` event fires reliably. The limitation: no dynamic params (`:id`), no query strings, and the `#` in every URL.
+
+If you are new, do not worry about memorizing browser APIs here. Focus on the flow:
+
+1. read the current URL
+2. find a matching route
+3. run the handler for that route
+4. render the right view
+
+That same flow survives through every version of the router.
 
 ### v2 — Upgrade to the History API
 
@@ -137,6 +148,13 @@ _dispatch(fullPath) {
 ```
 
 Now `/users/:id` matches `/users/42`, and `ctx.params.id === '42'`. Query strings like `?tag=history` land in `ctx.query.tag`.
+
+That means the router is doing two jobs at once:
+
+- deciding **which page** to show
+- extracting **which data** the page needs from the URL
+
+That is why routing matters so much in frontend apps.
 
 ---
 
