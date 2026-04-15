@@ -347,9 +347,20 @@ JavaScript Runtime: Three Key Structures
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- a debugger pauses a program at useful moments
+- while paused, you can inspect variables, scope, and call stack
+- stepping means moving through execution in controlled small steps
+- building a debugger means recording and replaying execution state
+
 ## Building It Step by Step
 
 ### v1 — A Trace Logger
+
+In plain English: we start with the easiest debugging tool possible, which is just recording what happened.
 
 The simplest debugger is a transparent wrapper — it logs state without changing behavior:
 
@@ -434,6 +445,8 @@ class Debugger {
 ```
 
 ### v4 — Source Instrumentation
+
+In plain English: we rewrite the code slightly so it reports its own progress while running.
 
 The most powerful piece: automatically transform source code to capture its own state as it runs.
 

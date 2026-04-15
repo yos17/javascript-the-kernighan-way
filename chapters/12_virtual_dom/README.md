@@ -14,9 +14,20 @@ If you are new, the most important idea is this: the virtual DOM is not the real
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- the virtual DOM is just a JavaScript description of UI
+- `render()` builds real DOM from that description
+- `patch()` compares old and new descriptions
+- the goal is to change as little real DOM as possible
+
 ## Building It Step by Step
 
 ### v1 — The Naive Approach: Wipe and Rebuild
+
+In plain English: first we build the obvious version, even though it is inefficient, so we can clearly see what problem the better version is solving.
 
 Start with the simplest possible thing that works:
 
@@ -89,6 +100,8 @@ This already handles the counter app perfectly. Incrementing `count` from 4 to 5
 That is the heart of the virtual DOM idea: do your thinking in JavaScript objects first, then make the smallest possible DOM change.
 
 ### v3 — Add `updateProps` and `reconcileChildren`
+
+In plain English: now we teach the system how to update the same element instead of replacing it.
 
 For the full diff, we need to update attributes when they change, and recursively diff the children list:
 

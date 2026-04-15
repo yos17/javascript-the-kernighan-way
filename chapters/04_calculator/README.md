@@ -32,6 +32,15 @@ If this chapter feels hard, do not try to hold the whole calculator in your head
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- the calculator is not one big trick, it is three smaller jobs
+- first break the input into pieces
+- then understand how those pieces fit together
+- then compute the answer from that structure
+
 ## Building It Step by Step
 
 ### v1 — A Function That Computes
@@ -55,6 +64,8 @@ add(2, multiply(3, 4));   // 2 + (3 * 4) = 14
 This works for hardcoded expressions, but can't parse strings. The input is already structured (function calls) — there's nothing to parse.
 
 ### v2 — A Tokenizer
+
+In plain English: the tokenizer reads the string left to right and labels each piece so later code does not have to work with raw characters anymore.
 
 The second step: split a string into typed tokens. `"2 + 3 * 4"` becomes a flat list:
 
@@ -107,6 +118,8 @@ The token stream is flat — all structural information (precedence, grouping) i
 That means tokenizing does not solve the whole problem. It only prepares the data for the next step. This is a common programming pattern: one stage simplifies the input, then the next stage does the deeper thinking.
 
 ### v3 — A Recursive-Descent Parser and Evaluator
+
+In plain English: the parser turns the flat token list into a shape that matches mathematical meaning.
 
 The full system: tokenize → parse into a tree → evaluate the tree.
 

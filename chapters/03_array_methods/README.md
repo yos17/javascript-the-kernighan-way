@@ -34,9 +34,20 @@ One more beginner idea matters here: a callback is just a function you hand to a
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- `map` changes each item into a new item
+- `filter` keeps some items and removes others
+- `reduce` combines many items into one final value
+- the callback is just your custom rule for what should happen
+
 ## Building It Step by Step
 
 ### v1 — The Three Loops
+
+In plain English: we are writing the hidden loops that JavaScript normally runs for you.
 
 The first version implements each method as a plain function. Notice the loop structure:
 

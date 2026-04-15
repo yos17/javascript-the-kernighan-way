@@ -54,9 +54,20 @@ If you keep those four roles clear, Redux becomes much easier to follow.
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- Redux is about keeping shared state predictable
+- actions describe what happened
+- reducers calculate the next state
+- subscribers react after the state changes
+
 ## Building It Step by Step
 
 ### v1 — Minimal Store (15 lines)
+
+In plain English: we are building one central box that stores data and updates it in one controlled way.
 
 Start with just the essentials: a store that holds state, lets you read it with `getState()`, and changes it only via `dispatch()`. No listeners, no middleware.
 
@@ -129,6 +140,8 @@ The `return unsubscribe` pattern is standard JavaScript cleanup idiom. A functio
 Why copy the listener list with `[...listeners]` before iterating? If a listener calls `unsubscribe` during iteration, it would splice the array mid-loop — skipping the next listener. The copy makes iteration safe.
 
 ### v3 — Add `combineReducers` and `applyMiddleware`
+
+In plain English: now we split one big state manager into smaller pieces and add extra behavior around updates.
 
 Large apps need multiple state slices and cross-cutting concerns (logging, async). Add both:
 

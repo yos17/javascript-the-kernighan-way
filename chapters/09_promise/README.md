@@ -39,6 +39,15 @@ If async code feels confusing, that is normal. The hardest part is that the valu
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- a Promise represents a result that is not ready yet
+- it starts pending, then becomes fulfilled or rejected
+- `.then()` means "when the result is ready, do this next"
+- each `.then()` creates the next step in the chain
+
 ## Building It Step by Step
 
 ### v1 — State and Settlement Only
@@ -86,6 +95,8 @@ The guard `if (this.state !== PENDING) return` enforces one-way transitions. Cal
 That one-way rule is important because it makes Promises trustworthy. Once a Promise is fulfilled or rejected, everyone who uses it can rely on that result staying fixed.
 
 ### v2 — Add `.then()` and Value Threading
+
+In plain English: `.then()` lets you say what should happen after the async result arrives.
 
 Now we add the chaining primitive. The key insight: `.then()` must return a **new Promise**, not `this`. If it returned `this`, two `.then()` calls on the same promise would share the same resolved value — there'd be no way to transform the value between steps.
 
@@ -155,6 +166,8 @@ MyPromise.resolve(1)
 Why push handlers into an array instead of running immediately? Because the Promise might already be settled when `.then()` is called — or it might settle *later*. The array handles both cases: if settled, `_runHandlers` fires right away; if pending, the handlers wait.
 
 ### v3 — Microtask Scheduling, `.catch`, `.finally`, and Statics
+
+In plain English: now we make the Promise behave more like the real JavaScript version people use every day.
 
 The final version adds three things:
 

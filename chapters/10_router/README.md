@@ -12,9 +12,20 @@ A beginner-friendly way to think about a router is: it is just an `if/else` syst
 
 ---
 
+## Beginner Summary
+
+Before you dive into the code, keep this in mind:
+
+- a router watches the URL
+- it decides which page handler matches that URL
+- it passes route information to that handler
+- then your app renders the right view
+
 ## Building It Step by Step
 
 ### v1 — Hash Router (15 lines)
+
+In plain English: we are listening for URL changes and matching simple paths.
 
 Before the History API existed, SPAs used `#`-based URLs. The hash portion of a URL (`#/users/1`) is never sent to the server — it's purely client-side. This makes it the simplest possible router: no `pushState`, no `popstate`, just `hashchange`.
 
@@ -110,6 +121,8 @@ class Router {
 Same route registration as before. Same patterns. The only change: `navigate()` uses `pushState` instead of setting `location.hash`, and we listen for `popstate` instead of `hashchange`.
 
 ### v3 — Named Params, Query Strings, and `_compile()`
+
+In plain English: now the router can understand flexible URLs instead of only exact strings.
 
 The final version replaces exact string matching with RegExp pattern matching, adds `URLSearchParams` for query strings, and moves route registration to use `_compile()`.
 
