@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your Own Debugger — Chapter 13</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    h1 { color: #d2a8ff; font-size: 1.2em; margin-bottom: 3px; }
+    .subtitle { color: #484f58; font-size: 0.8em; margin-bottom: 20px; }
+
+    /* ─── Layout ─────────────────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 0.9fr;
+      gap: 14px;
+      max-width: 1200px;
+    }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ─── Panel ──────────────────────────────────────────── */
+    .panel {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .panel-label {
+      font-size: 0.7em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #484f58;
+      margin-bottom: 10px;
+    }
+
+    /* ─── Code panel ─────────────────────────────────────── */
+    #code-lines {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 5px;
+      overflow-y: auto;
+      max-height: 480px;
+    }
+
+    .code-line {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      font-size: 0.82em;
+      line-height: 1.7;
+      position: relative;
+    }
+    .code-line:hover { background: #1a1f2e; }
+
+    /* Breakpoint gutter — click to toggle */
+    .bp-gutter {
+      width: 18px;
+      min-width: 18px;
+      text-align: center;
+      cursor: pointer;
+      color: #21262d;
+      user-select: none;
+      padding-top: 1px;
+      flex-shrink: 0;
+    }
+    .bp-gutter:hover { color: #f85149; }
+    .code-line.has-bp .bp-gutter { color: #f85149; }
+    .code-line.has-bp .bp-gutter::before { content: '●'; }
+    .code-line:not(.has-bp) .bp-gutter::before { content: '○'; }
+
+    /* Line number */
+    .line-num {
+      width: 28px;
+      min-width: 28px;
+      text-align: right;
+      color: #30363d;
+      padding-right: 8px;
+      padding-top: 1px;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    /* Arrow indicator for current line */
+    .line-arrow {
+      width: 14px;
+      min-width: 14px;
+      text-align: center;
+      color: #e3b341;
+      padding-top: 1px;
+      flex-shrink: 0;
+    }
+
+    /* Source text */
+    .line-src {
+      flex: 1;
+      white-space: pre;
+      padding-right: 10px;
+      color: #c9d1d9;
+    }
+
+    /* Current line highlight */
+    .code-line.current-line {
+      background: #2a2000;
+    }
+    .code-line.current-line .line-num { color: #e3b341; }
+    .code-line.current-line .line-arrow::before { content: '→'; }
+
+    /* Breakpoint + current line */
+    .code-line.has-bp.current-line { background: #2a1a00; }
+
+    /* ─── Variables panel ────────────────────────────────── */
+    #scope-vars {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 5px;
+      padding: 8px;
+      min-height: 80px;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+
+    .var-row {
+      display: flex;
+      gap: 8px;
+      padding: 3px 4px;
+      border-radius: 3px;
+      font-size: 0.82em;
+      align-items: baseline;
+    }
+    .var-name { color: #79c0ff; min-width: 70px; flex-shrink: 0; }
+    .var-val  { color: #3fb950; word-break: break-all; }
+    .var-val.changed { color: #e3b341; background: #2a1e00; padding: 1px 4px; border-radius: 2px; }
+    .var-val.is-fn   { color: #d2a8ff; font-style: italic; }
+    .var-empty { color: #484f58; font-size: 0.8em; padding: 6px 4px; }
+
+    /* ─── Call stack panel ───────────────────────────────── */
+    #call-stack {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 5px;
+      padding: 8px;
+      min-height: 60px;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+
+    .stack-frame {
+      font-size: 0.8em;
+      padding: 3px 6px;
+      border-left: 2px solid #21262d;
+      margin-bottom: 3px;
+      color: #8b949e;
+    }
+    .stack-frame:first-child {
+      border-left-color: #d2a8ff;
+      color: #d2a8ff;
+    }
+    .stack-frame:last-child { color: #484f58; }
+
+    /* ─── Note banner ────────────────────────────────────── */
+    #note-banner {
+      font-size: 0.78em;
+      color: #79c0ff;
+      background: #0f1e2e;
+      border: 1px solid #1a3a5c;
+      border-radius: 4px;
+      padding: 5px 8px;
+      min-height: 26px;
+      margin-bottom: 12px;
+      word-break: break-word;
+    }
+
+    /* ─── Watch panel ────────────────────────────────────── */
+    #watch-list {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 5px;
+      padding: 8px;
+      min-height: 50px;
+      max-height: 130px;
+      overflow-y: auto;
+      margin-bottom: 8px;
+    }
+
+    .watch-row {
+      display: flex;
+      gap: 8px;
+      font-size: 0.8em;
+      padding: 2px 2px;
+      align-items: baseline;
+    }
+    .watch-expr { color: #c9d1d9; min-width: 80px; flex-shrink: 0; }
+    .watch-expr::after { content: ' ='; color: #484f58; }
+    .watch-result { color: #3fb950; word-break: break-all; }
+    .watch-result.error { color: #f85149; font-style: italic; }
+    .watch-del {
+      margin-left: auto;
+      cursor: pointer;
+      color: #484f58;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+    .watch-del:hover { color: #f85149; }
+    .watch-empty { color: #484f58; font-size: 0.78em; padding: 4px; }
+
+    .watch-add-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .watch-add-row input {
+      flex: 1;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8em;
+    }
+    .watch-add-row input:focus { outline: none; border-color: #d2a8ff; }
+
+    /* ─── Buttons ────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      background: #21262d;
+      color: #8b949e;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      padding: 6px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.76em;
+      cursor: pointer;
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #30363d; color: #c9d1d9; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn.primary {
+      background: #3d1f7a;
+      color: #d2a8ff;
+      border-color: #6e40c9;
+    }
+    .btn.primary:hover { background: #5a2fa8; }
+    .btn.primary:disabled { background: #1e1040; }
+
+    .btn.danger {
+      background: #2a0e0e;
+      color: #f85149;
+      border-color: #5c1a1a;
+    }
+    .btn.danger:hover { background: #3d1515; }
+
+    /* ─── Progress ───────────────────────────────────────── */
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 4px;
+      background: #21262d;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #d2a8ff;
+      border-radius: 2px;
+      transition: width 0.1s;
+    }
+    .progress-label { font-size: 0.72em; color: #484f58; white-space: nowrap; }
+
+    /* ─── Program selector ───────────────────────────────── */
+    .program-select-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .program-select-row select {
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8em;
+      flex: 1;
+      cursor: pointer;
+    }
+    .program-select-row select:focus { outline: none; border-color: #d2a8ff; }
+    .program-label { font-size: 0.78em; color: #484f58; white-space: nowrap; }
+
+    /* ─── Keyboard hint ──────────────────────────────────── */
+    .kbd-hints {
+      font-size: 0.68em;
+      color: #30363d;
+      margin-top: 8px;
+      line-height: 1.8;
+    }
+    kbd {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-family: monospace;
+      font-size: 0.95em;
+      color: #8b949e;
+    }
+
+    /* ─── Syntax colours (very basic) ────────────────────── */
+    .kw  { color: #ff7b72; }   /* keywords */
+    .num { color: #79c0ff; }   /* numbers */
+    .str { color: #a5d6ff; }   /* strings */
+    .cmt { color: #484f58; }   /* comments */
+    .fn  { color: #d2a8ff; }   /* function names */
+  </style>
+</head>
+<body>
+  <h1>Build Your Own Debugger</h1>
+  <p class="subtitle">Chapter 13 — step-through execution · scope inspection · call stack · breakpoints · watch expressions</p>
+
+  <div class="layout">
+
+    <!-- ─── Left: Source Code ──────────────────────── -->
+    <div class="panel">
+      <div class="panel-label">Source Code — click line number to toggle breakpoint</div>
+      <div id="code-lines"></div>
+    </div>
+
+    <!-- ─── Middle: State ─────────────────────────── -->
+    <div class="panel">
+      <div class="panel-label">Variables (current scope)</div>
+      <div id="scope-vars"><div class="var-empty">Not running</div></div>
+
+      <div class="panel-label">Note</div>
+      <div id="note-banner"></div>
+
+      <div class="panel-label">Call Stack</div>
+      <div id="call-stack"><div class="var-empty">Not running</div></div>
+    </div>
+
+    <!-- ─── Right: Watch + Controls ──────────────── -->
+    <div class="panel">
+      <div class="panel-label">Watch Expressions</div>
+      <div id="watch-list"><div class="watch-empty">No expressions — add one below</div></div>
+      <div class="watch-add-row">
+        <input id="watch-input" placeholder="e.g.  n * 2  or  arr.length" />
+        <button class="btn primary" onclick="addWatch()">Add</button>
+      </div>
+
+      <div class="panel-label">Controls</div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-into"  onclick="doStepInto()" title="F11">↓ Into</button>
+        <button class="btn primary" id="btn-over"  onclick="doStepOver()" title="F10">↷ Over</button>
+        <button class="btn"         id="btn-out"   onclick="doStepOut()"  title="⇧F11">↑ Out</button>
+        <button class="btn"         id="btn-cont"  onclick="doContinue()" title="F8">▶ Continue</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn"         id="btn-back"  onclick="doStepBack()">← Back</button>
+        <button class="btn danger"  id="btn-reset" onclick="doReset()">↺ Reset</button>
+      </div>
+
+      <div class="progress-row">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+        <span class="progress-label" id="progress-label">—</span>
+      </div>
+
+      <div class="panel-label">Program</div>
+      <div class="program-select-row">
+        <select id="program-select" onchange="loadProgram()">
+          <option value="fibonacci">fibonacci(4)  — recursion &amp; call stack</option>
+          <option value="insertion">insertionSort([5,3,1,4,2])  — loops</option>
+          <option value="closure">makeCounter(10)  — closures &amp; scope</option>
+        </select>
+      </div>
+
+      <div class="kbd-hints">
+        <kbd>F11</kbd> Step Into &nbsp;
+        <kbd>F10</kbd> Step Over &nbsp;
+        <kbd>⇧F11</kbd> Step Out<br>
+        <kbd>F8</kbd> Continue &nbsp;
+        <kbd>F9</kbd> Step Back
+      </div>
+    </div>
+
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  PROGRAMS
+//
+//  Each program is defined as:
+//    source:  string[]     — the source lines shown in the code panel
+//    gen:     function     — a generator that yields { line, vars, stack, note }
+//
+//  Each yielded frame:
+//    line:   number    — 1-indexed source line currently executing
+//    vars:   object    — all in-scope variables and their current values
+//    stack:  string[]  — call stack, innermost first
+//    note:   string    — human-readable annotation (optional)
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ─── Helper: delegate to a sub-generator and capture its return value ──
+// (Standard for...of discards the return value; we need it for recursive calls)
+function* delegate(gen, collect) {
+  let r = gen.next();
+  while (!r.done) { yield r.value; r = gen.next(); }
+  collect.value = r.value;   // capture the return value
+}
+
+
+// ───────────────────────────────────────────────────────────────────────
+//  Program 1: fibonacci(4)
+//
+//  Demonstrates:
+//    - Call stack growing and shrinking with recursion
+//    - Step Into (enter a recursive call)  vs Step Over (skip it)
+//    - Base case vs recursive case
+// ───────────────────────────────────────────────────────────────────────
+
+const FIB_SOURCE = [
+  'function fibonacci(n) {',
+  '  if (n <= 1) return n;',
+  '  const left  = fibonacci(n - 1);',
+  '  const right = fibonacci(n - 2);',
+  '  return left + right;',
+  '}',
+  '',
+  'fibonacci(4);',
+];
+
+function* fibGen(n, parentStack) {
+  // parentStack is the call stack of whoever called us (for nested recursion)
+  const frame = `fibonacci(${n})`;
+  const stack = parentStack ? [frame, ...parentStack] : [frame];
+
+  yield { line: 1, vars: { n }, stack, note: `fibonacci(${n}) called` };
+
+  if (n <= 1) {
+    yield { line: 2, vars: { n }, stack, note: `n(${n}) ≤ 1 → return ${n}` };
+    return n;
+  }
+
+  yield { line: 2, vars: { n }, stack, note: `n(${n}) > 1, continuing` };
+
+  // left = fibonacci(n - 1)
+  yield { line: 3, vars: { n }, stack, note: `→ calling fibonacci(${n - 1})` };
+  const leftResult = { value: undefined };
+  yield* delegate(fibGen(n - 1, stack), leftResult);
+  const left = leftResult.value;
+  yield { line: 3, vars: { n, left }, stack, note: `fibonacci(${n - 1}) returned ${left}` };
+
+  // right = fibonacci(n - 2)
+  yield { line: 4, vars: { n, left }, stack, note: `→ calling fibonacci(${n - 2})` };
+  const rightResult = { value: undefined };
+  yield* delegate(fibGen(n - 2, stack), rightResult);
+  const right = rightResult.value;
+  yield { line: 4, vars: { n, left, right }, stack, note: `fibonacci(${n - 2}) returned ${right}` };
+
+  // return left + right
+  const ret = left + right;
+  yield { line: 5, vars: { n, left, right, ret }, stack, note: `${left} + ${right} = ${ret}, returning` };
+  return ret;
+}
+
+function* fibProgram() {
+  yield { line: 8, vars: {}, stack: ['<global>'], note: 'program start' };
+  const res = { value: undefined };
+  yield* delegate(fibGen(4, ['<global>']), res);
+  yield { line: 8, vars: { result: res.value }, stack: ['<global>'], note: `fibonacci(4) = ${res.value}` };
+}
+
+
+// ───────────────────────────────────────────────────────────────────────
+//  Program 2: insertionSort([5, 3, 1, 4, 2])
+//
+//  Demonstrates:
+//    - Shallow call stack (one function, no recursion)
+//    - Step Over (each iteration of the while loop)
+//    - Array mutation at each step
+// ───────────────────────────────────────────────────────────────────────
+
+const SORT_SOURCE = [
+  'function insertionSort(arr) {',
+  '  for (let i = 1; i < arr.length; i++) {',
+  '    const key = arr[i];',
+  '    let j = i - 1;',
+  '    while (j >= 0 && arr[j] > key) {',
+  '      arr[j + 1] = arr[j];',
+  '      j--;',
+  '    }',
+  '    arr[j + 1] = key;',
+  '  }',
+  '  return arr;',
+  '}',
+  '',
+  'const sorted = insertionSort([5, 3, 1, 4, 2]);',
+];
+
+function* sortProgram() {
+  const arr = [5, 3, 1, 4, 2];
+  const stack = ['insertionSort([5,3,1,4,2])'];
+
+  yield { line: 1, vars: { arr: [...arr] }, stack, note: 'function entry' };
+
+  for (let i = 1; i < arr.length; i++) {
+    yield { line: 2, vars: { arr: [...arr], i }, stack, note: `outer for: i = ${i}` };
+
+    const key = arr[i];
+    yield { line: 3, vars: { arr: [...arr], i, key }, stack, note: `key = arr[${i}] = ${key}` };
+
+    let j = i - 1;
+    yield { line: 4, vars: { arr: [...arr], i, key, j }, stack, note: `j = ${j}` };
+
+    // while condition check (shown before each iteration, including the one that exits)
+    while (true) {
+      const cond = j >= 0 && arr[j] > key;
+      const condStr = j >= 0
+        ? `j(${j}) ≥ 0 && arr[${j}](${arr[j]}) > key(${key}) → ${cond}`
+        : `j(${j}) < 0 → false, exit`;
+      yield { line: 5, vars: { arr: [...arr], i, key, j }, stack, note: condStr };
+      if (!cond) break;
+
+      arr[j + 1] = arr[j];
+      yield { line: 6, vars: { arr: [...arr], i, key, j }, stack, note: `arr[${j + 1}] ← arr[${j}] (${arr[j + 1]})` };
+
+      j--;
+      yield { line: 7, vars: { arr: [...arr], i, key, j }, stack, note: `j-- → ${j}` };
+    }
+
+    arr[j + 1] = key;
+    yield { line: 9, vars: { arr: [...arr], i, key, j }, stack, note: `arr[${j + 1}] ← ${key} → [${arr}]` };
+  }
+
+  yield { line: 11, vars: { arr: [...arr] }, stack, note: `return [${arr}]` };
+
+  yield { line: 14, vars: { sorted: [...arr] }, stack: ['<global>'], note: `sorted = [${arr}]` };
+}
+
+
+// ───────────────────────────────────────────────────────────────────────
+//  Program 3: makeCounter(10)
+//
+//  Demonstrates:
+//    - Closures: 'count' lives in makeCounter's scope, not increment's
+//    - The scope chain: increment reads 'count' from its outer scope
+//    - Persistent closure state across multiple calls
+// ───────────────────────────────────────────────────────────────────────
+
+const CLOSURE_SOURCE = [
+  'function makeCounter(start) {',
+  '  let count = start;',
+  '  function increment(step) {',
+  '    count += step;',
+  '    return count;',
+  '  }',
+  '  return increment;',
+  '}',
+  '',
+  'const counter = makeCounter(10);',
+  'const a = counter(1);',
+  'const b = counter(2);',
+  'const c = counter(3);',
+];
+
+function* closureProgram() {
+  // global scope: call makeCounter(10)
+  yield { line: 10, vars: {}, stack: ['<global>'], note: 'calling makeCounter(10)' };
+
+  yield { line: 1, vars: { start: 10 }, stack: ['makeCounter(10)', '<global>'], note: 'function entry' };
+  yield { line: 2, vars: { start: 10, count: 10 }, stack: ['makeCounter(10)', '<global>'], note: 'count = start = 10' };
+  yield { line: 3, vars: { start: 10, count: 10 }, stack: ['makeCounter(10)', '<global>'], note: 'define increment (captures count from this scope)' };
+  yield { line: 7, vars: { start: 10, count: 10 }, stack: ['makeCounter(10)', '<global>'], note: 'return increment ← closes over count' };
+
+  yield { line: 10, vars: { counter: '[Function: increment]' }, stack: ['<global>'], note: 'counter = increment fn (count=10 in its closure)' };
+
+  // Call counter(1) = increment(1)
+  yield { line: 11, vars: { counter: '[Function: increment]', a: undefined }, stack: ['<global>'], note: 'calling counter(1)' };
+  yield { line: 3, vars: { step: 1 }, stack: ['increment(1)', '<global>'], note: 'function entry — step=1, "count" is in closure scope' };
+  yield { line: 4, vars: { step: 1, count: 10 }, stack: ['increment(1)', '<global>'], note: 'read count=10 from closure (makeCounter scope)' };
+  yield { line: 4, vars: { step: 1, count: 11 }, stack: ['increment(1)', '<global>'], note: 'count += 1 → 11 (mutates closure variable)' };
+  yield { line: 5, vars: { step: 1, count: 11 }, stack: ['increment(1)', '<global>'], note: 'return 11' };
+  yield { line: 11, vars: { counter: '[Function: increment]', a: 11 }, stack: ['<global>'], note: 'a = 11' };
+
+  // Call counter(2) = increment(2)
+  yield { line: 12, vars: { counter: '[Function: increment]', a: 11, b: undefined }, stack: ['<global>'], note: 'calling counter(2)' };
+  yield { line: 3, vars: { step: 2 }, stack: ['increment(2)', '<global>'], note: 'function entry — step=2' };
+  yield { line: 4, vars: { step: 2, count: 11 }, stack: ['increment(2)', '<global>'], note: 'read count=11 — same closure, persisted from call 1!' };
+  yield { line: 4, vars: { step: 2, count: 13 }, stack: ['increment(2)', '<global>'], note: 'count += 2 → 13' };
+  yield { line: 5, vars: { step: 2, count: 13 }, stack: ['increment(2)', '<global>'], note: 'return 13' };
+  yield { line: 12, vars: { counter: '[Function: increment]', a: 11, b: 13 }, stack: ['<global>'], note: 'b = 13' };
+
+  // Call counter(3) = increment(3)
+  yield { line: 13, vars: { counter: '[Function: increment]', a: 11, b: 13, c: undefined }, stack: ['<global>'], note: 'calling counter(3)' };
+  yield { line: 3, vars: { step: 3 }, stack: ['increment(3)', '<global>'], note: 'function entry — step=3' };
+  yield { line: 4, vars: { step: 3, count: 13 }, stack: ['increment(3)', '<global>'], note: 'count=13 — closure still alive, count keeps accumulating' };
+  yield { line: 4, vars: { step: 3, count: 16 }, stack: ['increment(3)', '<global>'], note: 'count += 3 → 16' };
+  yield { line: 5, vars: { step: 3, count: 16 }, stack: ['increment(3)', '<global>'], note: 'return 16' };
+  yield { line: 13, vars: { counter: '[Function: increment]', a: 11, b: 13, c: 16 }, stack: ['<global>'], note: 'c = 16  — program complete' };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  minidbg — The Debugger Engine
+//
+//  Works with a pre-recorded trace — run the generator to completion,
+//  collect every frame into an array, then let the user navigate freely.
+//
+//  This is "time-travel debugging": the execution is recorded in full,
+//  and you can step forward AND backward through it at will.
+// ═══════════════════════════════════════════════════════════════════════
+
+class MiniDbg {
+  constructor() {
+    this.trace       = [];        // array of frames (the full recording)
+    this.cursor      = 0;         // current position in the trace
+    this.breakpoints = new Map(); // line → condition string | null
+    this.watches     = [];        // array of expression strings
+  }
+
+  // ── Build the trace by running a generator to completion ──────────────
+  load(gen) {
+    this.trace  = [];
+    this.cursor = 0;
+    for (const frame of gen) this.trace.push(frame);
+  }
+
+  // ── Current frame ──────────────────────────────────────────────────────
+  current() { return this.trace[this.cursor] || null; }
+  prev()    { return this.cursor > 0 ? this.trace[this.cursor - 1] : null; }
+
+  // ── Step controls ──────────────────────────────────────────────────────
+
+  // Step Into: advance exactly one frame (enters sub-calls)
+  stepInto() {
+    if (this.cursor < this.trace.length - 1) this.cursor++;
+  }
+
+  // Step Back: go one frame back (time travel)
+  stepBack() {
+    if (this.cursor > 0) this.cursor--;
+  }
+
+  // Step Over: advance until we're back at the same or shallower call depth.
+  // This "skips over" any sub-calls made by the current line.
+  stepOver() {
+    const depth = this.trace[this.cursor].stack.length;
+    while (this.cursor < this.trace.length - 1) {
+      this.cursor++;
+      if (this.trace[this.cursor].stack.length <= depth) break;
+    }
+  }
+
+  // Step Out: advance until we're one level shallower than current depth.
+  // Returns from the current function.
+  stepOut() {
+    const depth = this.trace[this.cursor].stack.length;
+    while (this.cursor < this.trace.length - 1) {
+      this.cursor++;
+      if (this.trace[this.cursor].stack.length < depth) break;
+    }
+  }
+
+  // Continue: advance until a breakpoint or the end.
+  continue() {
+    while (this.cursor < this.trace.length - 1) {
+      this.cursor++;
+      const f = this.trace[this.cursor];
+      if (this.isBreakpoint(f.line, f.vars)) break;
+    }
+  }
+
+  // ── Breakpoints ────────────────────────────────────────────────────────
+
+  toggleBreakpoint(line) {
+    if (this.breakpoints.has(line)) {
+      this.breakpoints.delete(line);
+    } else {
+      this.breakpoints.set(line, null);  // unconditional
+    }
+  }
+
+  isBreakpoint(line, vars) {
+    if (!this.breakpoints.has(line)) return false;
+    const cond = this.breakpoints.get(line);
+    if (cond === null) return true;  // unconditional
+    try {
+      const fn = new Function(...Object.keys(vars), `return !!(${cond})`);
+      return fn(...Object.values(vars));
+    } catch { return false; }
+  }
+
+  // ── Watch expressions ──────────────────────────────────────────────────
+
+  addWatch(expr) {
+    if (expr && !this.watches.includes(expr)) this.watches.push(expr);
+  }
+
+  removeWatch(expr) {
+    this.watches = this.watches.filter(w => w !== expr);
+  }
+
+  // Evaluate a watch expression against a vars object.
+  // Uses new Function to evaluate in the scope of the current variables.
+  evalWatch(expr, vars) {
+    try {
+      const safeVars = {};
+      for (const [k, v] of Object.entries(vars)) {
+        // Skip function values — can't pass them as params cleanly
+        if (typeof v !== 'function') safeVars[k] = v;
+      }
+      const fn = new Function(...Object.keys(safeVars), `return (${expr})`);
+      return JSON.stringify(fn(...Object.values(safeVars)));
+    } catch (e) {
+      return `⚠ ${e.message}`;
+    }
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  UI — rendering and interaction
+// ═══════════════════════════════════════════════════════════════════════
+
+const dbg = new MiniDbg();
+
+// Program registry
+const PROGRAMS = {
+  fibonacci: { source: FIB_SOURCE, gen: fibProgram },
+  insertion: { source: SORT_SOURCE, gen: sortProgram },
+  closure:   { source: CLOSURE_SOURCE, gen: closureProgram },
+};
+
+let currentSource = [];
+
+
+// ── render: update all panels to reflect the current frame ────────────
+function render() {
+  const curr = dbg.current();
+  if (!curr) return;
+
+  renderCode(curr);
+  renderVars(curr);
+  renderStack(curr);
+  renderNote(curr);
+  renderWatches(curr);
+  renderProgress();
+  updateButtons();
+}
+
+
+// ── Code panel ────────────────────────────────────────────────────────
+function renderCode(frame) {
+  const container = document.getElementById('code-lines');
+  container.innerHTML = '';
+
+  currentSource.forEach((text, idx) => {
+    const lineNum = idx + 1;
+    const isCurrent = frame.line === lineNum;
+    const isBp      = dbg.breakpoints.has(lineNum);
+
+    const row = document.createElement('div');
+    row.className = 'code-line' + (isCurrent ? ' current-line' : '') + (isBp ? ' has-bp' : '');
+
+    // Breakpoint gutter
+    const gutter = document.createElement('span');
+    gutter.className = 'bp-gutter';
+    gutter.title = isBp ? 'Click to remove breakpoint' : 'Click to add breakpoint';
+    gutter.addEventListener('click', () => {
+      dbg.toggleBreakpoint(lineNum);
+      renderCode(dbg.current());  // re-render code panel only
+    });
+
+    // Line number
+    const num = document.createElement('span');
+    num.className = 'line-num';
+    num.textContent = lineNum;
+
+    // Arrow column
+    const arrow = document.createElement('span');
+    arrow.className = 'line-arrow';
+
+    // Source text (with very basic syntax colouring)
+    const src = document.createElement('span');
+    src.className = 'line-src';
+    src.innerHTML = syntaxColor(text);
+
+    row.appendChild(gutter);
+    row.appendChild(num);
+    row.appendChild(arrow);
+    row.appendChild(src);
+    container.appendChild(row);
+
+    // Scroll current line into view
+    if (isCurrent) {
+      setTimeout(() => row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 0);
+    }
+  });
+}
+
+
+// ── Variables panel ───────────────────────────────────────────────────
+function renderVars(frame) {
+  const el = document.getElementById('scope-vars');
+  const vars = frame.vars || {};
+  const prevVars = (dbg.prev() || {}).vars || {};
+
+  if (Object.keys(vars).length === 0) {
+    el.innerHTML = '<div class="var-empty">No variables in scope</div>';
+    return;
+  }
+
+  el.innerHTML = Object.entries(vars).map(([k, v]) => {
+    const isFn      = typeof v === 'function' || v === '[Function: increment]';
+    const changed   = JSON.stringify(prevVars[k]) !== JSON.stringify(v);
+    const display   = isFn ? v : JSON.stringify(v);
+    const valClass  = 'var-val' + (isFn ? ' is-fn' : '') + (changed ? ' changed' : '');
+    return `<div class="var-row">
+      <span class="var-name">${escHtml(k)}</span>
+      <span class="${valClass}">${escHtml(display)}</span>
+    </div>`;
+  }).join('');
+}
+
+
+// ── Call stack panel ──────────────────────────────────────────────────
+function renderStack(frame) {
+  const el = document.getElementById('call-stack');
+  const stack = frame.stack || [];
+
+  if (stack.length === 0) {
+    el.innerHTML = '<div class="var-empty">Empty</div>';
+    return;
+  }
+
+  el.innerHTML = stack.map(f =>
+    `<div class="stack-frame">${escHtml(f)}</div>`
+  ).join('');
+}
+
+
+// ── Note banner ───────────────────────────────────────────────────────
+function renderNote(frame) {
+  document.getElementById('note-banner').textContent = frame.note || '';
+}
+
+
+// ── Watch panel ───────────────────────────────────────────────────────
+function renderWatches(frame) {
+  const el = document.getElementById('watch-list');
+  if (dbg.watches.length === 0) {
+    el.innerHTML = '<div class="watch-empty">No expressions — add one below</div>';
+    return;
+  }
+
+  const vars = frame.vars || {};
+  el.innerHTML = dbg.watches.map(expr => {
+    const result = dbg.evalWatch(expr, vars);
+    const isErr  = result.startsWith('⚠');
+    return `<div class="watch-row">
+      <span class="watch-expr">${escHtml(expr)}</span>
+      <span class="watch-result ${isErr ? 'error' : ''}">${escHtml(result)}</span>
+      <span class="watch-del" onclick="removeWatch(${JSON.stringify(expr)})" title="Remove">✕</span>
+    </div>`;
+  }).join('');
+}
+
+
+// ── Progress bar ──────────────────────────────────────────────────────
+function renderProgress() {
+  const total = dbg.trace.length;
+  const pos   = dbg.cursor + 1;
+  const pct   = total > 0 ? (pos / total * 100).toFixed(0) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${pos}/${total}`;
+}
+
+
+// ── Enable/disable buttons based on cursor position ───────────────────
+function updateButtons() {
+  const atStart = dbg.cursor === 0;
+  const atEnd   = dbg.cursor >= dbg.trace.length - 1;
+
+  document.getElementById('btn-into').disabled = atEnd;
+  document.getElementById('btn-over').disabled = atEnd;
+  document.getElementById('btn-out').disabled  = atEnd;
+  document.getElementById('btn-cont').disabled = atEnd;
+  document.getElementById('btn-back').disabled = atStart;
+}
+
+
+// ── Control handlers ──────────────────────────────────────────────────
+function doStepInto()  { dbg.stepInto();  render(); }
+function doStepOver()  { dbg.stepOver();  render(); }
+function doStepOut()   { dbg.stepOut();   render(); }
+function doContinue()  { dbg.continue();  render(); }
+function doStepBack()  { dbg.stepBack();  render(); }
+
+function doReset() {
+  dbg.cursor = 0;
+  render();
+}
+
+function loadProgram() {
+  const name = document.getElementById('program-select').value;
+  const prog = PROGRAMS[name];
+  if (!prog) return;
+
+  currentSource = prog.source;
+  dbg.breakpoints.clear();
+  dbg.load(prog.gen());    // run generator to collect full trace
+  doReset();
+}
+
+
+// ── Watch expression controls ─────────────────────────────────────────
+function addWatch() {
+  const input = document.getElementById('watch-input');
+  const expr  = input.value.trim();
+  if (expr) {
+    dbg.addWatch(expr);
+    input.value = '';
+    render();
+  }
+}
+
+function removeWatch(expr) {
+  dbg.removeWatch(expr);
+  render();
+}
+
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Ignore if typing in an input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key === 'F11' && e.shiftKey) { e.preventDefault(); doStepOut();  return; }
+  if (e.key === 'F11')               { e.preventDefault(); doStepInto(); return; }
+  if (e.key === 'F10')               { e.preventDefault(); doStepOver(); return; }
+  if (e.key === 'F8')                { e.preventDefault(); doContinue(); return; }
+  if (e.key === 'F9')                { e.preventDefault(); doStepBack(); return; }
+});
+
+document.getElementById('watch-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addWatch();
+});
+
+
+// ── Basic syntax colouring ────────────────────────────────────────────
+// Just enough to make the code readable — not a full parser.
+function syntaxColor(line) {
+  // Escape HTML first
+  let s = escHtml(line);
+  // Comment
+  if (/^\s*\/\//.test(line)) return `<span class="cmt">${s}</span>`;
+  // Keywords (careful: replace whole words only, don't touch content in strings)
+  s = s.replace(/\b(function|return|const|let|var|if|else|for|while|of|in|new|this)\b/g,
+    '<span class="kw">$1</span>');
+  // Numbers
+  s = s.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="num">$1</span>');
+  // Strings
+  s = s.replace(/&#39;[^&#]*&#39;|&quot;[^&]*&quot;|`[^`]*`/g,
+    m => `<span class="str">${m}</span>`);
+  return s;
+}
+
+
+// ── Utility ───────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+
+// ── Boot ──────────────────────────────────────────────────────────────
+loadProgram();
+</script>
+</body>
+</html>

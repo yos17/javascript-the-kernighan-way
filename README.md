@@ -12,7 +12,7 @@ This book takes that idea through two phases:
 
 **Chapters 1–4: The Language** — fundamental JavaScript through building real tools. Types and strings, control flow, arrays and loops, functions. Each chapter builds a working library from scratch.
 
-**Chapters 5–12: Build Your Own X** — each chapter builds a real library from scratch. Lodash. jQuery. A test framework. A template engine. Promises. A router. Redux. A virtual DOM. You use these tools every day; now you'll understand exactly how they work at the machine level.
+**Chapters 5–13: Build Your Own X** — each chapter builds a real library from scratch. Lodash. jQuery. A test framework. A template engine. Promises. A router. Redux. A virtual DOM. A debugger. You use these tools every day; now you'll understand exactly how they work at the machine level.
 
 The premise of chapters 5–12: the best way to understand a tool is to build it yourself. A router is a regex matcher and a `history.pushState` wrapper. Redux is a closure with a pub/sub system. A virtual DOM is a JavaScript object comparer that calls `setAttribute`. These aren't magic — they're patterns, and once you see the pattern, you can build anything.
 
@@ -62,6 +62,7 @@ No Node. No package managers. No terminal. Every program is a single `.html` fil
 | 10 | [Build Your Own Router](chapters/10_router/) | Client-side SPA router | `history.pushState`, RegExp named groups, `URLSearchParams` |
 | 11 | [Build Your Own Redux](chapters/11_redux/) | Predictable state container | Pure reducers, pub/sub, middleware currying |
 | 12 | [Build Your Own Virtual DOM](chapters/12_virtual_dom/) | React-style reconciler | vnode diffing, minimal DOM patching, reconciliation |
+| 13 | [Build Your Own Debugger](chapters/13_debugger/) | Step-through debugger with breakpoints, scope, call stack, watch | `debugger` statement, Chrome DevTools, generators, code instrumentation, `new Function` |
 
 ## Code Conventions
 
