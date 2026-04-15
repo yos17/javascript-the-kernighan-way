@@ -1,12 +1,12 @@
 # Chapter 6 — Build Your Own jQuery
 
-jQuery was the dominant JavaScript library for over a decade. At its peak, it ran on 78% of all websites. Today, most frameworks have replaced it — but its API design is still the clearest ever built for DOM manipulation. Understanding how `$()` works, how method chaining is implemented, and how event delegation scales reveals the patterns that every modern framework builds on. In this chapter you build a miniature version from scratch.
+This chapter is where the book starts moving from language basics into browser architecture. jQuery is a great bridge because it turns messy DOM code into a cleaner interface. You do not need to memorize the full history of jQuery. You only need to see the beginner-friendly patterns underneath it: selecting elements, wrapping them, and making repeated DOM tasks simpler.
 
 ---
 
 ## The Problem
 
-In the mid-2000s, writing cross-browser JavaScript was genuinely painful. Internet Explorer and Firefox implemented the DOM differently — `attachEvent` vs `addEventListener`, `innerText` vs `textContent`, broken `querySelectorAll` support. John Resig released jQuery in 2006 to solve that specific problem: one API that works everywhere.
+Raw DOM code gets repetitive fast. You find elements, loop over them, add classes, attach events, and repeat that over and over. A small wrapper can make all of that easier to read and reuse.
 
 But jQuery's enduring influence isn't the browser-normalisation layer — modern browsers solved that. It's the *design* of the API. Resig made three choices that shaped the web:
 

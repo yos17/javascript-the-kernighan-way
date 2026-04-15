@@ -1,14 +1,14 @@
 # Chapter 1 — Build Your Own Logger
 
-Every program produces output. `console.log` gets you started, but real programs need structure: a way to mark how serious a message is, a timestamp to show when it happened, and type information to show what kind of data you're looking at. In this chapter you build a structured logger from scratch. The logger is about 60 lines of code — but writing it will teach you JavaScript's entire type system, how strings work under the hood, and why functions can return objects with methods.
+A logger is a great first JavaScript tool because it does something useful right away. You give it a value, and it prints something readable. While building it, you learn one of the most important beginner skills in JavaScript: understanding what kind of value you are working with.
 
 ---
 
 ## The Problem
 
-Before browser dev tools existed, developers wrote custom debug utilities by hand. Node.js apps still use Winston or Pino. Frontend apps use the `debug` library. What they all share: a function that accepts a value of *any type* — string, number, object, null, a function itself — and formats it into something a human can read.
+`console.log` is enough to get started, but it quickly becomes messy. If you log a string, an array, `null`, or an object, the output can look inconsistent. If something goes wrong, you also want to know how serious it is and when it happened.
 
-Building that function requires answering three questions JavaScript makes you answer explicitly:
+To build a better logger, you need to answer three basic JavaScript questions:
 
 ```
 What type is this value?   →  typeof, Array.isArray, the null quirk
@@ -16,7 +16,7 @@ How should I display it?   →  template literals, String(), JSON.stringify
 Where should I store it?   →  objects, arrays, factory functions
 ```
 
-These three questions are the foundation of every JavaScript program. By the time your logger is working, you'll have real answers to all three.
+These questions show up in almost every JavaScript program, not just loggers. That is why this chapter is a good place to begin.
 
 ---
 

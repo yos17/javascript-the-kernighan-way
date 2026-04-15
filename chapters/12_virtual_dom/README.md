@@ -1,6 +1,6 @@
 # Chapter 12 — Build Your Own Virtual DOM
 
-React. Preact. Vue. Solid. Every modern UI framework that "only updates what changed" uses the same core idea: instead of touching the real DOM directly, you build a lightweight description of the UI in plain JavaScript objects, then let a reconciler figure out the minimal set of DOM operations to sync it with reality. That description is the virtual DOM. In this chapter you build the whole thing — `h()`, `render()`, `patch()` — in about 75 lines. Then you build a full todo app on top of it.
+By this point, you are ready for one of the big ideas behind modern UI frameworks. A virtual DOM is just a structured description of the interface plus a way to compare the old version and the new one. It sounds fancy, but the core loop is small enough to build yourself.
 
 ---
 

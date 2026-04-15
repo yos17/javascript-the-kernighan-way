@@ -1,18 +1,21 @@
 # Chapter 2 — Build Your Own Validator
 
-Every form you've ever filled out on the web — sign-up, checkout, profile update — had a validator behind it. A validator takes a value and a set of rules and answers one question: does this value comply? The answer is either "yes" or "no, and here's specifically why not." In this chapter you build a validator from scratch. To do it, you'll need if/else, comparison operators, logical operators, and objects as data structures. By the end, you'll have built one of the most genuinely useful JavaScript tools in existence.
+Validation is a good beginner problem because it is simple to describe and useful immediately. A validator checks a value against rules and tells you whether it passes. While building one, you practice conditionals, comparisons, and objects, which are core JavaScript tools.
 
 ---
 
 ## The Problem
 
-Browser forms can lie. A user enters "abc" into an age field. They skip the required email. They type a password with no uppercase letters. The raw HTML `required` attribute helps, but it can't express business rules: "password must be at least 8 characters *and* contain a number *and* contain an uppercase letter."
+Users do not always enter good data. Someone leaves a field empty. Someone types text where a number should go. Someone enters a weak password. HTML can help a little, but many real rules have to be written in JavaScript.
 
 Libraries like [Yup](https://github.com/jquense/yup) and [Zod](https://zod.dev/) solve this with a schema: a description of what valid data looks like, separate from the code that checks it. Your data and your rules live in different places, so you can change one without touching the other.
 
-The core challenge: you need to check *multiple* rules against *one* value and *collect all the failures* — not just find the first one. A user who types a 2-character password with no uppercase and no number should see all three errors at once, not be forced to fix them one at a time.
+There are two beginner-friendly ideas here:
 
-The second challenge: the rules need to be reusable across fields. "Must be at least N characters" applies to username, password, and bio. You write the rule once; your schema applies it wherever it's needed.
+1. one value may need to pass several checks
+2. the same check should be reusable in more than one place
+
+That is why we build rules separately and then apply them through a schema.
 
 ---
 

@@ -1,6 +1,6 @@
 # Chapter 7 — Build Your Own Test Framework
 
-Jest. Mocha. Vitest. Every JavaScript project uses one of them. But they're not magic — they're programs built from three simple ideas: a function that groups tests (`describe`), a function that runs one test (`it`), and a function that checks a value (`expect`). Build those three things yourself and you'll understand every test framework you ever encounter. You'll also understand why tests are written the way they are, what "assertion" actually means, and how `try/catch` becomes the engine of every test runner.
+Once you start writing larger programs, you need a way to check that they still work after changes. A test framework sounds advanced, but the core idea is beginner-friendly: run a function, and if it throws, the test failed. This chapter builds from that small idea step by step.
 
 ---
 

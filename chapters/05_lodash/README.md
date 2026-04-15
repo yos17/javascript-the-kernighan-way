@@ -1,16 +1,16 @@
 # Chapter 5 — Build Your Own Lodash
 
-Lodash is one of the most downloaded JavaScript packages of all time. Millions of projects use it for `_.map`, `_.filter`, `_.groupBy`, `_.debounce`, and dozens of other utility functions. But what is it, really? It's a collection of functions — functions that take other functions as arguments, return new functions, and compose in clean pipelines. In this chapter you build a miniature version of it from scratch. By the end, you'll understand exactly what Lodash does, why it exists, and what "functional programming" actually means in practice.
+Now that you have built some core language tools, you can start building the helpers that bigger programs depend on. Lodash is a collection of reusable utility functions. This chapter keeps that idea beginner-friendly: instead of treating utility helpers as magic, you will build them from patterns you already know.
 
 ---
 
 ## The Problem
 
-In the early 2010s, JavaScript was rapidly moving from "page decoration" to full application logic. Developers were processing datasets in the browser — filtering tables, grouping results, debouncing search inputs. But the language itself was bare: no `Array.prototype.map`, no `Array.prototype.filter`, and patchy support across browsers.
+Once programs get a little bigger, you start solving the same kinds of problems again and again: transform a list, group items, remove duplicates, delay a function call. Writing all of that from scratch every time is wasteful.
 
 John-David Dalton released Lodash in 2012 to solve three things at once: (1) give every browser the same set of reliable collection utilities, (2) fill the gaps the standard library left (there was no built-in `groupBy`, `flatten`, or `debounce`), and (3) make the code read like the problem domain — `_.filter(books, b => b.genre === 'Sci-Fi')` is self-documenting in a way that raw `for` loops are not.
 
-The deeper insight: map, filter, reduce, groupBy, sortBy are not book-specific or user-specific. They are *universal patterns* over sequences. Build them once as reusable functions, and every dataset problem becomes a composition of parts you already understand. That idea — separating the *what* (transform, keep, accumulate) from the *how* (the specific function you pass in) — is the heart of functional programming.
+The important beginner idea is this: many programming tasks are really the same shape with different data. If you build a helper once, you can reuse it everywhere.
 
 You have a dataset of books. You need to search them, filter by genre, sort by rating, group by category, and compute aggregate statistics — all driven by user input. You could write custom loops everywhere. Or you build the abstractions once, and compose them.
 

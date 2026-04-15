@@ -1,6 +1,6 @@
 # Chapter 10 — Build Your Own Router
 
-React Router. Vue Router. Svelte's router. Every single-page app framework ships one — but they all solve the same problem: map URL paths to JavaScript functions without ever touching a server. When you click a link in a well-built SPA, the browser doesn't make an HTTP request. Instead, JavaScript intercepts the click, updates the URL using `history.pushState`, and calls a matching handler that swaps out the page content. Understanding this mechanism puts you in control of every routing decision you make. In this chapter you build exactly that — a 60-line router that handles named params, query strings, browser back/forward, and 404 pages. After this, React Router's `<Route path="/users/:id">` will have no mystery left in it.
+A router is the piece that makes a browser app feel like a multi-page site without full page reloads. That sounds advanced, but the main idea is simple: read the URL, match it, and run the right code. This chapter keeps that idea visible while building a more capable router step by step.
 
 ---
 

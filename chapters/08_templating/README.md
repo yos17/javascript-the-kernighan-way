@@ -1,6 +1,6 @@
 # Chapter 8 — Build Your Own Templating Engine
 
-Handlebars. Mustache. Pug. EJS. Every major framework ships a templating engine. But what are they? A template is a string with special placeholders. The engine replaces those placeholders with real data. Under the hood, this is a three-step compiler: tokenize the string into parts, generate JavaScript code from those parts, and wrap that code in a function. The result is a render function you can call with any data. In this chapter you build exactly that — and understand what Handlebars does every time you type `{{ name }}`.
+A templating engine can sound intimidating, but the beginner version is easy to describe: take a string with placeholders and fill it with data. This chapter starts from that simple replacement idea, then gradually grows it into a tiny real engine.
 
 ---
 

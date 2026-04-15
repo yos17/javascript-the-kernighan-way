@@ -1,6 +1,6 @@
 # Chapter 13 — Build Your Own Debugger
 
-Every JavaScript developer has stared at Chrome DevTools' Sources panel, stepped over a function, watched a variable turn green as it changed, and thought: *how does this actually work?* The breakpoint, the call stack, the scope panel — these aren't magic. They're software. The concepts underneath — execution contexts, scope chains, breakpoints as conditional stops — are exactly the concepts your JavaScript programs use every day. This chapter teaches you to use the real debugging tools fluently, then builds a simplified debugger from scratch so you understand exactly what's happening every time you press F10.
+A debugger feels like an expert tool, but it becomes much less scary once you understand what it is showing you. This chapter does two things: it teaches the real browser debugging tools, and then it builds a small debugger so the moving parts become visible instead of mysterious.
 
 ---
 

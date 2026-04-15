@@ -1,12 +1,12 @@
 # Chapter 3 — Build Your Own Array Methods
 
-`Array.prototype.map`. `Array.prototype.filter`. `Array.prototype.reduce`. These are the three most-used methods in modern JavaScript — you'll see them in almost every codebase, every framework, every library. But what do they actually do? In this chapter you build them from scratch, using only `for` loops and function calls. By the end you'll understand not just how to use these methods, but why they exist: they're the three fundamental patterns over sequences, and every collection operation you'll ever write is one of them.
+Array methods can feel magical when you first see them. `map`, `filter`, and `reduce` look compact, but they are not magic. They are just loops with clear jobs. In this chapter, you rebuild them from scratch so the short modern syntax makes sense instead of feeling mysterious.
 
 ---
 
 ## The Problem
 
-JavaScript code written before 2009 looked like this:
+A beginner often starts with a plain loop like this:
 
 ```javascript
 // Old way: explicit loops everywhere
@@ -28,7 +28,7 @@ const squared = numbers.map(n => n * n);
 
 One line. Self-documenting. The word "map" tells you exactly what's happening: *transform every element*. No index variable, no push, no manual accumulator.
 
-The goal of this chapter isn't to teach you the API — it's to show you that `map`, `filter`, and `reduce` are just loops. Once you've written them yourself, you'll understand what every callback receives, why `filter` uses the original item and `map` uses the return value, and why `reduce` is the most powerful of the three.
+The point of this chapter is not just to memorize the method names. The point is to see the pattern behind them. Once you understand that pattern, modern array code becomes much easier to read and write.
 
 ---
 

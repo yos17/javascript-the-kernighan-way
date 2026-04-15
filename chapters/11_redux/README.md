@@ -1,6 +1,6 @@
 # Chapter 11 — Build Your Own Redux
 
-Redux is one of the most influential JavaScript libraries ever written — not because of what it does (it's about 100 lines of code), but because of what it *enforces*: state lives in one place, state only changes through actions, and the same action always produces the same state. These three rules — single source of truth, immutability, pure reducers — solve the most common source of bugs in large apps: state that changes unexpectedly from multiple places. Build Redux from scratch and you'll understand why these constraints exist, not just how to follow them.
+Redux is really a disciplined way to manage shared state. That can sound abstract at first, so this chapter keeps the problem concrete: one app, one store, many UI parts that all depend on the same data. Once you see that problem clearly, the Redux rules feel much more reasonable.
 
 ---
 

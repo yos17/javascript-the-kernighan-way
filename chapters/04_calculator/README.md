@@ -1,12 +1,12 @@
 # Chapter 4 — Build Your Own Calculator
 
-Every programming language needs a way to evaluate expressions. Python's `eval()`. JavaScript's own expression evaluator. Excel's formula engine. These all solve the same problem: take a string like `"(2 + 3) * 4"` and compute its value. In this chapter you build one from scratch. The calculator is the most ambitious program in the first four chapters — it involves tokenizing input, parsing it into a tree, and evaluating that tree with recursive functions. By the time it works, you'll understand functions at a deep level: how they call themselves, how they close over shared state, and how to design a clean public API.
+This is the hardest chapter in the first part of the book, but it is worth it. A calculator takes a string like `"(2 + 3) * 4"` and turns it into a result. To build that, you have to break a larger problem into smaller steps. That is one of the most important programming skills you can learn.
 
 ---
 
 ## The Problem
 
-The naive approach to evaluating `"2 + 3 * 4"` is to split on operators and compute left-to-right. But `"2 + 3 * 4"` should equal `14`, not `20` — multiplication has higher precedence than addition. And `"(2 + 3) * 4"` should equal `20` because the parentheses override the default precedence.
+A beginner might try to evaluate `"2 + 3 * 4"` by splitting the string and working from left to right. But that gives the wrong answer. Multiplication must happen before addition, unless parentheses say otherwise.
 
 String-splitting can't handle this. You need to understand the *structure* of the expression — that `2 + (3 * 4)` is an addition of `2` and the product `3 * 4`. That structure is a tree:
 
@@ -20,7 +20,7 @@ String-splitting can't handle this. You need to understand the *structure* of th
 
 Evaluate the tree bottom-up: `3 * 4 = 12`, then `2 + 12 = 14`. Operator precedence is captured by where things appear in the tree — multiplication is lower in the tree (evaluated first) because its parsing function is called deeper in the recursion.
 
-This is how JavaScript itself evaluates your code. The JS engine tokenizes, parses into an AST, then evaluates. You're building a tiny version of the same thing.
+This is also how real language tools work. They do not guess from the raw string. They break the input into pieces, understand the structure, and then compute the result.
 
 ---
 

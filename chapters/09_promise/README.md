@@ -1,6 +1,6 @@
 # Chapter 9 — Build Your Own Promise
 
-`async/await` is the most important addition to modern JavaScript — but understanding it requires understanding what it sits on top of. Promises are the contract that makes async code composable: they let you pass a future value around like a present one, chain transformations without nesting callbacks, and handle errors at any point in the chain. Yet most developers use them daily without knowing why `.then()` returns a new Promise, what `queueMicrotask` does, or why an unhandled rejection silently swallows errors. In this chapter you build a Promise implementation from scratch — state machine, microtask queue, chaining, `.all()`, `.race()`, and `.finally()`. After this, `async/await` will never be mysterious again.
+Promises are one of the hardest JavaScript topics for beginners, so this chapter matters. The goal is not to make async programming feel easy in one page. The goal is to make it less mysterious. You will build the core pieces slowly enough to see that a Promise is really a state machine with callbacks attached.
 
 ---
 
