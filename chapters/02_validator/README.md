@@ -17,6 +17,8 @@ There are two beginner-friendly ideas here:
 
 That is why we build rules separately and then apply them through a schema.
 
+A schema is just data that describes other data. That phrase sounds abstract, but the idea is simple. Instead of hardcoding every check directly inside one function, you store the rules in an object. Then your validation function reads that object and decides what checks to run. In other words: the schema says what should happen, and the validator does the work.
+
 ---
 
 ## Building It Step by Step
@@ -45,6 +47,8 @@ function validateUsername(value) {
 ```
 
 This works, but it's a dead end. You can't reuse any of these checks for the email field or the password field. Every new field means writing another function from scratch.
+
+This is a common beginner moment in programming: the code works, but it does not scale. That usually means it is time to separate the repeated pattern from the specific case.
 
 ### v2 — Extract Reusable Rule Checkers
 
@@ -81,6 +85,14 @@ const RULES = {
 ```
 
 Now each checker is independent, testable, and reusable. `RULES.minLength('hi', 3)` returns an error; `RULES.minLength('hello', 3)` returns null.
+
+Notice the shape of each rule function:
+
+- it receives a value
+- it checks one condition
+- it returns either an error message or `null`
+
+That consistent shape is what makes the whole system composable.
 
 ### v3 — A Schema-Driven validate() Function
 

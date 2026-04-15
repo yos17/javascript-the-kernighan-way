@@ -43,6 +43,15 @@ Redux Data Flow
 
 You have a shopping cart. The cart total affects the header badge, the cart icon, the checkout button, and a summary panel. Whenever an item is added or removed, all four need to update. With scattered `let cart = []` variables, keeping them in sync is a nightmare. Redux's insight: put all state in one object, enforce that it only changes through explicit actions, and notify every subscriber after every change. One source of truth, infinite observers.
 
+A simple way to think about Redux is this:
+
+- the **store** holds the current state
+- an **action** describes what happened
+- a **reducer** calculates the next state
+- the UI reads the new state and updates
+
+If you keep those four roles clear, Redux becomes much easier to follow.
+
 ---
 
 ## Building It Step by Step
@@ -75,6 +84,8 @@ console.log(store.getState()); // [{ id: 1, name: 'Book', qty: 1, price: 24.99 }
 ```
 
 This is already valuable. State only changes through `dispatch`. The `@@INIT` dispatch seeds the initial state from the reducer's default parameter. But there's no way for the UI to know when something changed — you'd have to re-read `getState()` manually.
+
+Notice what this version does not do: it does not touch the DOM directly. That separation is intentional. Redux is about state flow first. The UI can be attached later.
 
 ### v2 — Add `subscribe()` — the Pub/Sub Pattern
 

@@ -18,6 +18,8 @@ Where should I store it?   →  objects, arrays, factory functions
 
 These questions show up in almost every JavaScript program, not just loggers. That is why this chapter is a good place to begin.
 
+If you are new, focus on one idea first: a JavaScript value is not just "data". It always has a type, and that type changes what you can do with it. A string behaves differently from a number. An array behaves differently from an object. Good JavaScript starts with noticing that difference.
+
 ---
 
 ## Building It Step by Step

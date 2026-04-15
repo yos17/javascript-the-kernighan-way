@@ -22,6 +22,14 @@ Evaluate the tree bottom-up: `3 * 4 = 12`, then `2 + 12 = 14`. Operator preceden
 
 This is also how real language tools work. They do not guess from the raw string. They break the input into pieces, understand the structure, and then compute the result.
 
+For beginners, it helps to think of the calculator as three separate jobs:
+
+1. **tokenizing**: turn the raw string into small pieces
+2. **parsing**: figure out how those pieces belong together
+3. **evaluating**: compute the final answer from that structure
+
+If this chapter feels hard, do not try to hold the whole calculator in your head at once. Pick one of those three jobs and understand it in isolation.
+
 ---
 
 ## Building It Step by Step
@@ -95,6 +103,8 @@ tokenize('2 + 3 * 4');
 ```
 
 The token stream is flat — all structural information (precedence, grouping) is gone. Recovering it is the parser's job.
+
+That means tokenizing does not solve the whole problem. It only prepares the data for the next step. This is a common programming pattern: one stage simplifies the input, then the next stage does the deeper thinking.
 
 ### v3 — A Recursive-Descent Parser and Evaluator
 

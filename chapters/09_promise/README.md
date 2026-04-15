@@ -35,6 +35,8 @@ A Promise starts in `PENDING` and moves to exactly one settled state. Every `.th
 
 Your app needs to fetch a user, then fetch their posts, then display both. These are sequential async operations — each depends on the last. With callbacks, this creates deeply nested "callback hell." Promises solve this by representing a future value as an object you can chain. Build the Promise implementation yourself and you'll understand every `.then()` you ever write.
 
+If async code feels confusing, that is normal. The hardest part is that the value does not exist yet, but your program still needs a way to talk about it. A Promise is that way. It is a placeholder object that says, in effect, "the result is not ready yet, but I will tell you when it is."
+
 ---
 
 ## Building It Step by Step
@@ -81,9 +83,13 @@ console.log(p.state);  // 'pending'
 
 The guard `if (this.state !== PENDING) return` enforces one-way transitions. Call `resolve` twice — the second call is silently ignored.
 
+That one-way rule is important because it makes Promises trustworthy. Once a Promise is fulfilled or rejected, everyone who uses it can rely on that result staying fixed.
+
 ### v2 — Add `.then()` and Value Threading
 
 Now we add the chaining primitive. The key insight: `.then()` must return a **new Promise**, not `this`. If it returned `this`, two `.then()` calls on the same promise would share the same resolved value — there'd be no way to transform the value between steps.
+
+A beginner-friendly way to picture this is a pipeline. Each `.then()` step receives a value, changes it, and passes the new value to the next step. That only works if each step has its own resulting Promise.
 
 ```javascript
 class MyPromise {

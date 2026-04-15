@@ -10,6 +10,8 @@ You have a JavaScript object — the application state — and you want the DOM 
 
 The virtual DOM solution: describe the desired UI as a tree of plain objects, then *compare* the new tree against the previous one and touch only the DOM nodes that actually changed. A counter incrementing from 4 to 5 should update exactly one text node, nothing else.
 
+If you are new, the most important idea is this: the virtual DOM is not the real DOM. It is just a JavaScript description of what you want the real DOM to look like. That makes it easier to compare two versions before touching the browser.
+
 ---
 
 ## Building It Step by Step
@@ -37,6 +39,8 @@ function update() {
 ```
 
 This is fifteen words of logic and it works. Open the browser, click a button, the UI updates. But open DevTools and watch the Elements panel: every click destroys and recreates the entire DOM tree.
+
+That means the first version is correct but wasteful. This is another useful beginner lesson: code can be logically right and still be a bad implementation because it does too much work.
 
 Now stress-test it: add 500 todo items, type in the input field, then toggle a checkbox. Your cursor jumps out of the input — because the `<input>` element was destroyed and recreated. Add a CSS `transition: opacity 0.3s` on list items — transitions never play, because elements are replaced before they can animate. On a mobile device with 1000 items, the "rebuild" causes a full layout recalculation: 1000 `createElement` calls, 1000 `setAttribute` calls, one giant paint. A counter incrementing from 4 to 5 re-renders the entire page.
 
@@ -81,6 +85,8 @@ function patch(parent, oldVNode, newVNode, i = 0) {
 ```
 
 This already handles the counter app perfectly. Incrementing `count` from 4 to 5 touches exactly one text node. The `<input>` element is never touched, so focus is preserved. CSS transitions play because elements are never destroyed.
+
+That is the heart of the virtual DOM idea: do your thinking in JavaScript objects first, then make the smallest possible DOM change.
 
 ### v3 — Add `updateProps` and `reconcileChildren`
 

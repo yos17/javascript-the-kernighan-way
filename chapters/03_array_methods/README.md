@@ -30,6 +30,8 @@ One line. Self-documenting. The word "map" tells you exactly what's happening: *
 
 The point of this chapter is not just to memorize the method names. The point is to see the pattern behind them. Once you understand that pattern, modern array code becomes much easier to read and write.
 
+One more beginner idea matters here: a callback is just a function you hand to another function so it can decide what to do on each item. That is all `map`, `filter`, and `reduce` are doing. They loop for you, and they call your function at the right moment.
+
 ---
 
 ## Building It Step by Step
@@ -76,6 +78,12 @@ Three loops with three slightly different bodies. The key distinction:
 - `map` pushes `fn(item)` — the **return value**
 - `filter` pushes `array[i]` — the **original item** — but only when `fn(item)` is truthy
 - `reduce` reassigns `acc` to `fn(acc, item)` — the accumulator **replaces itself**
+
+If you get confused, ask one question: what is being collected on each loop iteration?
+
+- in `map`, you collect transformed items
+- in `filter`, you collect kept items
+- in `reduce`, you do not collect a list at all, you keep updating one running value
 
 ### v2 — The Short-Circuit Methods
 

@@ -79,6 +79,22 @@ Remember these four ideas:
 
 You do not need to understand every chapter fully on the first pass.
 
+A useful way to read this book is:
+
+- first, ask what problem the chapter is solving
+- second, identify the input and output of the code
+- third, trace one small example by hand
+- fourth, only then worry about the abstraction
+
+For example:
+
+- in the logger chapter, the input is a value and the output is a formatted message
+- in the validator chapter, the input is a value plus rules and the output is a list of errors
+- in the array chapter, the input is an array plus a callback and the output is a new array or a single final value
+- in the calculator chapter, the input is a string expression and the output is a number
+
+That input-output habit will help you through the entire book.
+
 ## Getting Started
 
 ```bash
